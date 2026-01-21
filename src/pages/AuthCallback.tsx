@@ -1,39 +1,28 @@
-import { useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import Layout from "@/components/layout/Layout";
-import { supabase } from "@/lib/supabase";
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
 
   useEffect(() => {
-    const run = async () => {
-      const code = params.get("code");
-      const redirect = params.get("redirect") || "/";
+    const finalizeAuth = async () => {
+      await supabase.auth.getSession();
 
-      try {
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) throw error;
-        }
+      const redirect =
+        localStorage.getItem('postAuthRedirect') || '/programs';
 
-        // At this point user is authenticated (session stored by supabase-js)
-        navigate(redirect, { replace: true });
-      } catch (e) {
-        console.error("Auth callback error:", e);
-        navigate("/login", { replace: true });
-      }
+      localStorage.removeItem('postAuthRedirect');
+
+      navigate(redirect, { replace: true });
     };
 
-    run();
-  }, [navigate, params]);
+    finalizeAuth();
+  }, [navigate]);
 
   return (
-    <Layout>
-      <div className="max-w-xl mx-auto px-4 py-16 text-center">
-        <div className="text-gray-600">Signing you in…</div>
-      </div>
-    </Layout>
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-gray-600 text-lg">Verifying your account…</p>
+    </div>
   );
 }
