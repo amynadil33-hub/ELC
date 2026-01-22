@@ -28,12 +28,18 @@ export default function Header() {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-              <span className="text-[#1F6F43] font-bold text-xl">ELC</span>
-            </div>
+            <img
+              src="/logo/elc-logo.png"
+              alt="ELC Logo"
+              className="h-12 w-auto"
+            />
             <div className="hidden sm:block">
-              <h1 className="text-white font-serif text-xl font-bold">Everyone's Learning Centre</h1>
-              <p className="text-[#C9A24D] text-xs">Excellence in Education Since 2001</p>
+              <h1 className="text-white font-serif text-xl font-bold">
+                Everyone's Learning Centre
+              </h1>
+              <p className="text-[#C9A24D] text-xs">
+                Excellence in Education Since 2001
+              </p>
             </div>
           </Link>
 
