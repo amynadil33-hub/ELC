@@ -1,13 +1,21 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { User } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { User } from "@supabase/supabase-js";
+
+type SignUpOptions = {
+  emailRedirectTo?: string;
+};
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    options?: SignUpOptions
+  ) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
 }
@@ -19,11 +27,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  /* -------------------- LOAD USER + ADMIN -------------------- */
   const loadUserAndRole = async () => {
     setLoading(true);
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
     const currentUser = session?.user ?? null;
     setUser(currentUser);
 
@@ -34,9 +44,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', currentUser.id)
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", currentUser.id)
       .single();
 
     if (!error && profile) {
@@ -51,22 +61,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadUserAndRole();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       loadUserAndRole();
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  /* -------------------- AUTH METHODS -------------------- */
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+    return { error: (error as Error) ?? null };
   };
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    return { error: error as Error | null };
+  // ✅ UPDATED: accepts options.emailRedirectTo
+  const signUp = async (email: string, password: string, options?: SignUpOptions) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: options?.emailRedirectTo
+        ? { emailRedirectTo: options.emailRedirectTo }
+        : undefined,
+    });
+
+    return { error: (error as Error) ?? null };
   };
 
   const signOut = async () => {
@@ -75,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email);
-    return { error: error as Error | null };
+    return { error: (error as Error) ?? null };
   };
 
   return (
@@ -87,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signOut,
-        resetPassword
+        resetPassword,
       }}
     >
       {children}
@@ -97,8 +116,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 }
