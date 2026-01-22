@@ -1,4 +1,8 @@
+// src/lib/constants.ts
+
+// ================================
 // ELC Brand Colors
+// ================================
 export const COLORS = {
   primary: '#1F6F43', // Deep Green
   accent: '#C9A24D', // Gold
@@ -8,31 +12,65 @@ export const COLORS = {
   text: '#2B2B2B',
 };
 
-// Image URLs
+// ================================
+// HOMEPAGE PLACEHOLDER IMAGES (KEEP THESE)
+// Used by Home page + marketing sections
+// These are your original Cloudfront placeholders
+// ================================
 export const IMAGES = {
   hero: 'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950468742_547e34df.jpg',
+
   students: [
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950492070_a174f995.png',
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950484948_31c4d46a.jpg',
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950486318_786bd4c9.jpg',
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950494612_50b024ce.png',
   ],
+
   chess: [
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950512839_a4125a0a.jpg',
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950524500_8289a1af.png',
   ],
+
   graduation: [
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950546969_34e2e0d5.jpg',
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950565697_e3aefc64.png',
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950555392_c352dd26.png',
   ],
+
   olevel: [
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950585434_c8351aaf.png',
     'https://d64gsuwffb70l.cloudfront.net/6960c785dbbe68a330bb6214_1767950586773_34838641.png',
   ],
 };
 
-// Course Categories
+// ================================
+// GALLERY REAL IMAGES (ONLY Gallery uses this)
+// Stored in: /public/gallery
+// IMPORTANT: Gallery should use ONLY these paths
+// ================================
+export const GALLERY_IMAGES = {
+  classroom: [
+    '/gallery/classroom-01.jpg',
+    '/gallery/classroom-02.jpg',
+    '/gallery/classroom-03.jpg',
+    '/gallery/classroom-04.jpg',
+  ],
+
+  chess: ['/gallery/chess-01.jpg', '/gallery/chess-02.jpg'],
+
+  graduation: [
+    '/gallery/graduation-01.jpg',
+    '/gallery/graduation-02.jpg',
+    '/gallery/graduation-03.jpg',
+  ],
+
+  achievements: ['/gallery/achievement-01.jpg', '/gallery/achievement-02.jpg'],
+};
+
+// ================================
+// Course Categories (Programs page)
+// ================================
 export const CATEGORIES = [
   'Cambridge English Programs',
   'Enrichment Programs',
@@ -41,7 +79,9 @@ export const CATEGORIES = [
   'Chess Program & Tournaments',
 ];
 
+// ================================
 // English Level Options
+// ================================
 export const ENGLISH_LEVELS = [
   'Beginner',
   'Elementary',
@@ -51,14 +91,18 @@ export const ENGLISH_LEVELS = [
   'Advanced',
 ];
 
+// ================================
 // School Time Options
+// ================================
 export const SCHOOL_TIMES = [
   'Morning Session (7:00 AM - 12:00 PM)',
   'Afternoon Session (12:00 PM - 5:00 PM)',
   'Full Day',
 ];
 
+// ================================
 // Grade Options
+// ================================
 export const GRADES = [
   'Nursery',
   'LKG',
