@@ -107,13 +107,13 @@ export default function MakePayment() {
       const filePath = `${user.id}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('payments_slips')
+        .from('payment_slips')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage
-        .from('payments_slips')
+        .from('payment_slips')
         .getPublicUrl(filePath);
 
       const totalAmount = tuitionFee + registrationFee;
@@ -196,8 +196,8 @@ export default function MakePayment() {
         <div className="border rounded-xl p-5 mb-6 bg-white">
           <h3 className="font-semibold mb-3">💰 Bank Transfer Details</h3>
           <p><strong>Bank:</strong> Bank of Maldives</p>
-          <p><strong>Account Name:</strong> Emir X Pvt Ltd</p>
-          <p><strong>Account Number:</strong> 7730000761972</p>
+          <p><strong>Account Name:</strong> Everyone's Learning Center</p>
+          <p><strong>Account Number:</strong> 7730000226678</p>
         </div>
 
         {/* Upload */}
