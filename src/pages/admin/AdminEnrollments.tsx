@@ -3,86 +3,144 @@ import Layout from "@/components/layout/Layout";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 
-interface Enrollment {
-  id: string;
-  status: string;
-  billing_period: string | null;
-  expected_installments: number | null;
-  started_at: string | null;
-  terminated_at: string | null;
-  termination_reason: string | null;
-  courses?: { title: string };
-  profiles?: { email: string };
-}
-
 interface Payment {
   id: string;
-  tuition_amount: number | null;
-  registration_fee: number | null;
+  user_id: string;
+  course_id: string;
   total_amount: number;
-  payment_method: string;
-  status: string;
-  slip_url: string | null;
   created_at: string;
+  status: "paid";
+}
+
+interface Course {
+  id: string;
+  title: string;
+}
+
+interface Profile {
+  id: string;
+  email: string;
 }
 
 export default function AdminEnrollments() {
   const { user, loading: authLoading, isAdmin } = useAuth();
 
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [payments, setPayments] = useState<Record<string, Payment[]>>({});
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [courses, setCourses] = useState<Record<string, Course>>({});
+  const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
+  const [enrollingId, setEnrollingId] = useState<string | null>(null);
+
+  /* ---------------- FETCH PAID PAYMENTS (NOT ENROLLED) ---------------- */
 
   useEffect(() => {
     if (!authLoading && user && isAdmin) {
-      fetchEnrollments();
+      fetchPayments();
     }
   }, [authLoading, user, isAdmin]);
 
-  const fetchEnrollments = async () => {
-    const { data } = await supabase
-      .from("enrollments")
+  const fetchPayments = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("payments")
       .select(`
         id,
-        status,
-        billing_period,
-        expected_installments,
-        started_at,
-        terminated_at,
-        termination_reason,
-        courses ( title ),
-        profiles:user_id ( email )
+        user_id,
+        course_id,
+        total_amount,
+        created_at,
+        status
       `)
+      .eq("status", "paid")
+      .is("enrollment_id", null)
       .order("created_at", { ascending: false });
 
-    setEnrollments(data || []);
-    setLoading(false);
-  };
-
-  const fetchPayments = async (enrollmentId: string) => {
-    if (payments[enrollmentId]) return;
-
-    const { data } = await supabase
-      .from("payments")
-      .select("*")
-      .eq("enrollment_id", enrollmentId)
-      .order("created_at", { ascending: false });
-
-    setPayments(prev => ({
-      ...prev,
-      [enrollmentId]: data || []
-    }));
-  };
-
-  const togglePayments = async (enrollmentId: string) => {
-    if (expanded === enrollmentId) {
-      setExpanded(null);
+    if (error) {
+      console.error("Payments fetch error:", error);
+      setLoading(false);
       return;
     }
 
-    await fetchPayments(enrollmentId);
-    setExpanded(enrollmentId);
+    setPayments(data || []);
+
+    // fetch related data separately
+    await Promise.all([
+      fetchCourses(data || []),
+      fetchProfiles(data || [])
+    ]);
+
+    setLoading(false);
+  };
+
+  /* ---------------- FETCH COURSES ---------------- */
+
+  const fetchCourses = async (payments: Payment[]) => {
+    const courseIds = [...new Set(payments.map(p => p.course_id))];
+
+    if (courseIds.length === 0) return;
+
+    const { data } = await supabase
+      .from("courses")
+      .select("id, title")
+      .in("id", courseIds);
+
+    const map: Record<string, Course> = {};
+    data?.forEach(c => (map[c.id] = c));
+    setCourses(map);
+  };
+
+  /* ---------------- FETCH PROFILES ---------------- */
+
+  const fetchProfiles = async (payments: Payment[]) => {
+    const userIds = [...new Set(payments.map(p => p.user_id))];
+
+    if (userIds.length === 0) return;
+
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .in("id", userIds);
+
+    const map: Record<string, Profile> = {};
+    data?.forEach(p => (map[p.id] = p));
+    setProfiles(map);
+  };
+
+  /* ---------------- ENROLL STUDENT ---------------- */
+
+  const enrollStudent = async (payment: Payment) => {
+    if (!user) return;
+
+    setEnrollingId(payment.id);
+
+    // 1️⃣ create enrollment
+    const { data: enrollment, error: enrollError } = await supabase
+      .from("enrollments")
+      .insert({
+        user_id: payment.user_id,
+        course_id: payment.course_id,
+        payment_id: payment.id,
+        status: "active",
+        started_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (enrollError) {
+      console.error("Enrollment failed:", enrollError);
+      setEnrollingId(null);
+      return;
+    }
+
+    // 2️⃣ link payment to enrollment
+    await supabase
+      .from("payments")
+      .update({ enrollment_id: enrollment.id })
+      .eq("id", payment.id);
+
+    await fetchPayments();
+    setEnrollingId(null);
   };
 
   /* ---------------- GUARDS ---------------- */
@@ -102,7 +160,7 @@ export default function AdminEnrollments() {
   }
 
   if (loading) {
-    return <Layout><div className="py-20 text-center">Loading enrollments…</div></Layout>;
+    return <Layout><div className="py-20 text-center">Loading…</div></Layout>;
   }
 
   /* ---------------- UI ---------------- */
@@ -112,100 +170,41 @@ export default function AdminEnrollments() {
       <div className="max-w-6xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-bold mb-6">Admin — Enrollments</h1>
 
-        {enrollments.map(e => (
-          <div key={e.id} className="border rounded-lg mb-4">
-            {/* Enrollment summary */}
-            <div className="p-4 flex justify-between items-start">
-              <div>
-                <p className="font-medium">{e.courses?.title}</p>
-                <p className="text-sm text-gray-500">{e.profiles?.email}</p>
-
-                <p className="text-sm mt-1">
-                  Billing: <strong>{e.billing_period ?? "N/A"}</strong>
-                </p>
-
-                {e.expected_installments && (
-                  <p className="text-sm">
-                    Expected installments: {e.expected_installments}
-                  </p>
-                )}
-
-                <p
-                  className={`text-sm font-semibold mt-1 ${
-                    e.status === "active"
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {e.status.toUpperCase()}
-                </p>
-              </div>
-
-              <button
-                onClick={() => togglePayments(e.id)}
-                className="text-sm px-4 py-2 border rounded-lg hover:bg-gray-50"
+        {payments.length === 0 ? (
+          <p>No paid students awaiting enrollment.</p>
+        ) : (
+          <div className="space-y-4">
+            {payments.map(p => (
+              <div
+                key={p.id}
+                className="border rounded-lg p-4 flex justify-between items-center"
               >
-                {expanded === e.id ? "Hide payments" : "View payments"}
-              </button>
-            </div>
-
-            {/* Payment history panel */}
-            {expanded === e.id && (
-              <div className="border-t bg-gray-50 p-4">
-                {payments[e.id]?.length ? (
-                  <div className="space-y-3">
-                    {payments[e.id].map(p => (
-                      <div
-                        key={p.id}
-                        className="bg-white border rounded p-3 flex justify-between"
-                      >
-                        <div>
-                          <p className="text-sm font-medium">
-                            {new Date(p.created_at).toLocaleDateString()}
-                          </p>
-                          <p className="text-xs text-gray-500 capitalize">
-                            {p.payment_method} • {p.status}
-                          </p>
-
-                          {p.slip_url && (
-                            <a
-                              href={p.slip_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-blue-600 underline"
-                            >
-                              View slip
-                            </a>
-                          )}
-                        </div>
-
-                        <div className="text-right">
-                          {p.registration_fee && (
-                            <p className="text-xs">
-                              Reg: MVR {p.registration_fee}
-                            </p>
-                          )}
-                          {p.tuition_amount && (
-                            <p className="text-xs">
-                              Tuition: MVR {p.tuition_amount}
-                            </p>
-                          )}
-                          <p className="font-bold">
-                            MVR {p.total_amount}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">
-                    No payments found for this enrollment.
+                <div>
+                  <p className="font-medium">
+                    {courses[p.course_id]?.title ?? "Course"}
                   </p>
-                )}
+                  <p className="text-sm text-gray-500">
+                    {profiles[p.user_id]?.email ?? "Student"}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Paid on {new Date(p.created_at).toLocaleString()}
+                  </p>
+                  <p className="font-semibold mt-1">
+                    MVR {p.total_amount}
+                  </p>
+                </div>
+
+                <button
+                  disabled={enrollingId === p.id}
+                  onClick={() => enrollStudent(p)}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                >
+                  Enroll student
+                </button>
               </div>
-            )}
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </Layout>
   );

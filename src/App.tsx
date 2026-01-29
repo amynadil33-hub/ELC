@@ -29,6 +29,7 @@ import AuthCallback from "./pages/AuthCallback";
 /* Admin */
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminEnrollments from "./pages/admin/AdminEnrollments";
+import AdminCourses from "./pages/admin/AdminCourses"; // ✅ NEW
 
 /* Fallback */
 import NotFound from "./pages/NotFound";
@@ -69,6 +70,7 @@ const App = () => (
                 {/* 🔐 Admin */}
                 <Route path="/admin/payments" element={<AdminPayments />} />
                 <Route path="/admin/enrollments" element={<AdminEnrollments />} />
+                <Route path="/admin/courses" element={<AdminCourses />} /> {/* ✅ NEW */}
 
                 {/* Fallback */}
                 <Route path="*" element={<NotFound />} />
