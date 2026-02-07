@@ -3,15 +3,10 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-
-// ✅ IMPORTANT: this is the flow you said was working before
-// If your project has ApplicationContext, keep this import.
-// If the import path differs, adjust it to your actual file.
 import { useApplication } from "@/context/ApplicationContext";
 
 type PaymentMode = "bml" | "transfer";
 
-// ✅ Change bucket name if yours is different
 const SLIP_BUCKET = "payment_slips";
 
 // Bank details
@@ -29,13 +24,23 @@ function sanitizeFileName(name: string) {
 }
 
 function getAmountFromCourse(course: any): number | null {
-  return (
+  // Prefer explicit totals
+  const total =
+    toNumberSafe(course?.total_amount) ??
+    toNumberSafe(course?.totalAmount) ??
     toNumberSafe(course?.price) ??
     toNumberSafe(course?.fee) ??
-    toNumberSafe(course?.amount) ??
-    toNumberSafe(course?.total_amount) ??
-    toNumberSafe(course?.totalAmount)
-  );
+    toNumberSafe(course?.amount);
+
+  // If total not present, try tuition + registration
+  const tuition = toNumberSafe(course?.tuition_amount);
+  const reg = toNumberSafe(course?.registration_fee);
+  if (!total && (tuition || reg)) {
+    const sum = (tuition ?? 0) + (reg ?? 0);
+    return sum > 0 ? sum : null;
+  }
+
+  return total;
 }
 
 export default function MakePayment() {
@@ -43,7 +48,7 @@ export default function MakePayment() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const { selectedCourse } = useApplication() as any; // keep flexible
+  const { selectedCourse } = useApplication() as any;
 
   const [mode, setMode] = useState<PaymentMode>("bml");
 
@@ -51,29 +56,40 @@ export default function MakePayment() {
   const [courseTitle, setCourseTitle] = useState<string>("");
   const [amount, setAmount] = useState<number | null>(null);
 
+  // Optional breakdown (used when inserting transfer rows)
+  const [tuitionAmount, setTuitionAmount] = useState<number | null>(null);
+  const [registrationFee, setRegistrationFee] = useState<number | null>(null);
+
+  const [loadingCourse, setLoadingCourse] = useState(false);
+
   const [loadingBml, setLoadingBml] = useState(false);
   const [loadingTransfer, setLoadingTransfer] = useState(false);
   const [slipFile, setSlipFile] = useState<File | null>(null);
 
-  // 1) Resolve from query params / location.state / ApplicationContext / localStorage
+  // 1) Resolve from query params / location.state / context / localStorage
   const resolved = useMemo(() => {
     const qpCourseId = searchParams.get("courseId") || searchParams.get("course_id") || "";
     const qpAmount = searchParams.get("amount") || searchParams.get("total_amount") || "";
+    const qpTitle = searchParams.get("title") || "";
 
     const st: any = location.state || {};
     const stCourseId = st.courseId || st.course_id || st.id || "";
     const stAmount = st.amount || st.total_amount || st.totalAmount;
+    const stTitle = st.title || "";
 
     const ctxCourseId = selectedCourse?.id || "";
     const ctxAmount = getAmountFromCourse(selectedCourse);
+    const ctxTitle = selectedCourse?.title || "";
 
     const lsCourseId = localStorage.getItem("elc_course_id") || "";
     const lsAmount = localStorage.getItem("elc_amount") || "";
+    const lsTitle = localStorage.getItem("elc_course_title") || "";
 
     const finalCourseId = qpCourseId || stCourseId || ctxCourseId || lsCourseId;
     const finalAmount = toNumberSafe(qpAmount || stAmount || ctxAmount || lsAmount);
 
-    const finalTitle = selectedCourse?.title || st?.title || "";
+    // Prefer: query param title -> context title -> state title -> localStorage title
+    const finalTitle = decodeURIComponent(qpTitle || "") || ctxTitle || stTitle || lsTitle || "";
 
     return { finalCourseId, finalAmount, finalTitle };
   }, [location.state, searchParams, selectedCourse]);
@@ -90,50 +106,73 @@ export default function MakePayment() {
     }
     if (resolved.finalTitle) {
       setCourseTitle(resolved.finalTitle);
+      localStorage.setItem("elc_course_title", resolved.finalTitle);
     }
   }, [resolved.finalCourseId, resolved.finalAmount, resolved.finalTitle]);
 
-  // 3) If we have courseId but still no amount, fetch from courses table
+  // 3) Always fetch course if we have courseId AND (title missing OR amount missing OR breakdown missing)
   useEffect(() => {
     const run = async () => {
       if (!courseId) return;
-      if (amount) return;
+
+      // Only skip if we already have everything
+      const hasTitle = !!courseTitle;
+      const hasAmount = !!amount;
+      const hasBreakdown = tuitionAmount !== null || registrationFee !== null;
+
+      if (hasTitle && hasAmount && hasBreakdown) return;
+
+      setLoadingCourse(true);
 
       const { data, error } = await supabase
         .from("courses")
-        .select("id,title,price,fee,amount,total_amount")
+        .select("id,title,price,fee,amount,total_amount,tuition_amount,registration_fee")
         .eq("id", courseId)
         .single();
 
+      setLoadingCourse(false);
+
       if (error) {
         console.error("Course fetch failed:", error);
+        // If RLS blocks courses, you’ll see this. The page can still work using stored values.
         return;
       }
 
-      if (data?.title && !courseTitle) setCourseTitle(data.title);
+      if (data?.title && !courseTitle) {
+        setCourseTitle(data.title);
+        localStorage.setItem("elc_course_title", data.title);
+      }
 
-      const derived = getAmountFromCourse(data);
-      if (derived) {
-        setAmount(derived);
-        localStorage.setItem("elc_amount", String(derived));
+      if (tuitionAmount === null && toNumberSafe((data as any)?.tuition_amount) !== null) {
+        setTuitionAmount(Number((data as any).tuition_amount));
+      }
+      if (registrationFee === null && toNumberSafe((data as any)?.registration_fee) !== null) {
+        setRegistrationFee(Number((data as any).registration_fee));
+      }
+
+      if (!amount) {
+        const derived = getAmountFromCourse(data);
+        if (derived) {
+          setAmount(derived);
+          localStorage.setItem("elc_amount", String(derived));
+        }
       }
     };
 
     run();
-  }, [courseId, amount, courseTitle]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, courseTitle, amount, tuitionAmount, registrationFee]);
 
-  // ---- session helper
   const requireSession = async () => {
     const {
       data: { session },
       error,
     } = await supabase.auth.getSession();
-
     if (error || !session) return null;
     return session;
   };
 
-  // ---- BML Pay (redirect to BML hosted card page)
+  // ---- BML Pay (use direct fetch so we can see JSON errors)
   const handleBmlPay = async () => {
     if (!courseId || !amount) {
       toast.error("Missing course or amount. Please go back and try again.");
@@ -148,27 +187,45 @@ export default function MakePayment() {
         return;
       }
 
-      // 🔑 CRITICAL: Forward JWT explicitly so auth.uid() is NOT NULL in DB
-      const { data, error } = await supabase.functions.invoke("initiate-bml-payment-v2", {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/initiate-bml-payment-v2`;
+
+      const res = await fetch(url, {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: { courseId, amount },
+        body: JSON.stringify({ courseId, amount }),
       });
 
-      if (error) {
-        console.error("BML start failed:", error);
-        toast.error("Failed to start BML payment.");
+      const text = await res.text();
+      let json: any = text;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // keep as text
+      }
+
+      if (!res.ok) {
+        console.error("BML start failed (body):", json);
+        // Try to show something useful to user
+        const msg =
+          json?.error ||
+          json?.message ||
+          json?.bml?.message ||
+          `Failed to start payment (${res.status})`;
+        toast.error(String(msg));
         return;
       }
 
-      if (!data?.paymentUrl) {
-        console.error("BML response missing paymentUrl:", data);
+      if (!json?.paymentUrl) {
+        console.error("Missing paymentUrl:", json);
         toast.error("BML did not return a payment URL.");
         return;
       }
 
-      window.location.href = data.paymentUrl;
+      window.location.href = json.paymentUrl;
     } catch (e) {
       console.error(e);
       toast.error("Unexpected error starting BML payment.");
@@ -211,22 +268,31 @@ export default function MakePayment() {
         return;
       }
 
-      // 1) Create payments row (pending)
+      const amountInLaari = Math.round(amount * 100);
+
+      // 1) Create payments row (pending) — match your schema
+      const insertPayload: any = {
+        user_id: session.user.id,
+        course_id: courseId,
+        payment_method: "transfer",
+        status: "pending",
+        currency: "MVR",
+        amount: amountInLaari,      // integer
+        total_amount: amount,       // numeric
+      };
+
+      if (tuitionAmount !== null) insertPayload.tuition_amount = tuitionAmount;
+      if (registrationFee !== null) insertPayload.registration_fee = registrationFee;
+
       const { data: payment, error: insertErr } = await supabase
         .from("payments")
-        .insert({
-          user_id: session.user.id,
-          course_id: courseId,
-          total_amount: amount,
-          currency: "MVR", // remove ONLY if your payments table doesn't have this column
-          status: "pending",
-        })
+        .insert(insertPayload)
         .select("id")
         .single();
 
       if (insertErr || !payment?.id) {
         console.error("Failed to create payment:", insertErr);
-        toast.error("Failed to create payment record.");
+        toast.error(insertErr?.message || "Failed to create payment record.");
         return;
       }
 
@@ -236,11 +302,13 @@ export default function MakePayment() {
       const safeName = sanitizeFileName(slipFile.name);
       const path = `slips/${session.user.id}/${paymentId}/${Date.now()}-${safeName}`;
 
-      const { error: uploadErr } = await supabase.storage.from(SLIP_BUCKET).upload(path, slipFile, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: slipFile.type,
-      });
+      const { error: uploadErr } = await supabase.storage
+        .from(SLIP_BUCKET)
+        .upload(path, slipFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: slipFile.type,
+        });
 
       if (uploadErr) {
         console.error("Slip upload failed:", uploadErr);
@@ -248,18 +316,16 @@ export default function MakePayment() {
         return;
       }
 
-      // 3) Store slip URL/path (best-effort)
+      // 3) Store slip_url only (your table has slip_url, not slip_path)
       const publicUrl = supabase.storage.from(SLIP_BUCKET).getPublicUrl(path).data.publicUrl;
 
-      const tryUpdates = [
-        { slip_url: publicUrl, slip_path: path },
-        { slip_url: publicUrl },
-        { slip_path: path },
-      ];
+      const { error: updErr } = await supabase
+        .from("payments")
+        .update({ slip_url: publicUrl })
+        .eq("id", paymentId);
 
-      for (const payload of tryUpdates) {
-        const { error: updErr } = await supabase.from("payments").update(payload).eq("id", paymentId);
-        if (!updErr) break;
+      if (updErr) {
+        console.warn("Slip URL update failed (non-fatal):", updErr);
       }
 
       toast.success("Slip submitted. Payment pending verification.");
@@ -274,6 +340,12 @@ export default function MakePayment() {
 
   const missing = !courseId || !amount;
 
+  const courseLabel = loadingCourse
+    ? "Loading course..."
+    : courseTitle
+      ? courseTitle
+      : courseId;
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto p-6">
@@ -283,17 +355,22 @@ export default function MakePayment() {
           <div className="border rounded-lg p-5">
             <p className="text-sm">Missing payment details. Please return to the course page and try again.</p>
 
-            <button type="button" className="mt-4 px-4 py-2 rounded-lg border" onClick={() => navigate(-1)}>
+            <button
+              type="button"
+              className="mt-4 px-4 py-2 rounded-lg border"
+              onClick={() => navigate(-1)}
+            >
               Go Back
             </button>
 
             <div className="mt-4 text-xs text-gray-600">
-              <div className="font-semibold mb-1">Debug (helps you find what broke):</div>
+              <div className="font-semibold mb-1">Debug:</div>
               <div>courseId: {String(courseId || "(empty)")}</div>
+              <div>courseTitle: {String(courseTitle || "(empty)")}</div>
               <div>amount: {String(amount || "(empty)")}</div>
               <div>selectedCourse in context: {String(!!selectedCourse)}</div>
               <div className="mt-2">
-                If this is empty now, the navigation stopped setting selectedCourse or state.
+                If courseTitle is empty, your course fetch may be blocked by courses RLS.
               </div>
             </div>
           </div>
@@ -302,12 +379,30 @@ export default function MakePayment() {
             <div className="border rounded-lg p-4 mb-6">
               <div className="flex justify-between text-sm">
                 <span>Course</span>
-                <span className="font-semibold">{courseTitle || courseId}</span>
+                <span className="font-semibold">{courseLabel}</span>
               </div>
+
               <div className="flex justify-between text-sm mt-2">
                 <span>Amount</span>
                 <span className="font-semibold">MVR {amount}</span>
               </div>
+
+              {(tuitionAmount !== null || registrationFee !== null) && (
+                <div className="mt-3 text-xs text-gray-600">
+                  {tuitionAmount !== null && (
+                    <div className="flex justify-between">
+                      <span>Tuition</span>
+                      <span>MVR {tuitionAmount}</span>
+                    </div>
+                  )}
+                  {registrationFee !== null && (
+                    <div className="flex justify-between">
+                      <span>Registration Fee</span>
+                      <span>MVR {registrationFee}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 mb-6">
