@@ -7,37 +7,34 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function jsonResp(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
-  });
-}
-
-async function safeJson(req: Request) {
-  try {
-    return await req.json();
-  } catch {
-    return null;
-  }
-}
-
 serve(async (req) => {
   try {
     // ---------------------------------------
     // CORS PRE-FLIGHT
     // ---------------------------------------
-    if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-    if (req.method !== "POST") return jsonResp({ success: false, error: "Method not allowed" }, 405);
+    if (req.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ success: false, error: "Method not allowed" }), {
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // ---------------------------------------
     // SAFE JSON PARSE
     // ---------------------------------------
-    const body = await safeJson(req);
-    if (!body) return jsonResp({ success: false, error: "Invalid JSON body" }, 400);
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ success: false, error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const courseId = body?.courseId ?? body?.course_id;
     const pricingId = body?.pricingId ?? body?.pricing_id ?? null;
@@ -45,32 +42,48 @@ serve(async (req) => {
     const amountRaw = body?.amount ?? body?.total_amount;
     const totalAmountMvr = Number(amountRaw);
 
-    if (!courseId) return jsonResp({ success: false, error: "Missing courseId" }, 400);
+    if (!courseId) {
+      return new Response(JSON.stringify({ success: false, error: "Missing courseId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!Number.isFinite(totalAmountMvr) || totalAmountMvr <= 0) {
-      return jsonResp({ success: false, error: "Invalid amount", amountRaw }, 400);
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid amount", amountRaw }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // ---------------------------------------
     // ENV VARS
     // ---------------------------------------
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const BML_API_URL = Deno.env.get("BML_API_URL");
-    const BML_API_KEY = Deno.env.get("BML_API_KEY");
-    const PAYMENT_REDIRECT_URL = Deno.env.get("PAYMENT_REDIRECT_URL");
+    const BML_API_URL = Deno.env.get("BML_API_URL")!;
+    const BML_API_KEY = Deno.env.get("BML_API_KEY")!;
+    const PAYMENT_REDIRECT_URL_RAW = Deno.env.get("PAYMENT_REDIRECT_URL")!;
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return jsonResp(
-        { success: false, error: "Missing SUPABASE_URL or SUPABASE_ANON_KEY in Edge Function secrets" },
-        500
-      );
-    }
-
-    if (!BML_API_URL || !BML_API_KEY || !PAYMENT_REDIRECT_URL) {
-      return jsonResp(
-        { success: false, error: "Missing BML secrets (BML_API_URL/BML_API_KEY/PAYMENT_REDIRECT_URL)" },
-        500
+    // Trim and validate redirect URL (BML is strict)
+    const PAYMENT_REDIRECT_URL = (PAYMENT_REDIRECT_URL_RAW || "").trim();
+    try {
+      const u = new URL(PAYMENT_REDIRECT_URL);
+      if (u.protocol !== "https:" && u.protocol !== "http:") {
+        throw new Error("redirectUrl must be http/https");
+      }
+    } catch {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Invalid PAYMENT_REDIRECT_URL (must be a full URL)",
+          value: PAYMENT_REDIRECT_URL,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -82,12 +95,15 @@ serve(async (req) => {
       req.headers.get("Authorization") ||
       "";
 
-    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
-      return jsonResp({ success: false, error: "Missing Bearer token" }, 401);
+    if (!authHeader.toLowerCase().startsWith("bearer ")) {
+      return new Response(JSON.stringify({ success: false, error: "Missing Bearer token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ---------------------------------------
-    // GET USER (AUTH API) — guarantees token is valid
+    // GET USER (AUTH API) — validates JWT
     // ---------------------------------------
     const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       method: "GET",
@@ -100,33 +116,36 @@ serve(async (req) => {
     const userJson = await userRes.json().catch(() => null);
 
     if (!userRes.ok || !userJson?.id) {
-      return jsonResp({ success: false, error: "Unauthenticated user", auth: userJson }, 401);
+      return new Response(JSON.stringify({ success: false, error: "Unauthenticated user", auth: userJson }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const userId: string = userJson.id;
 
     // ---------------------------------------
     // CREATE PAYMENT ROW (PENDING) via PostgREST
-    // This is the critical change: explicit Authorization + apikey
+    // (ensures your RLS policy with auth.uid() works)
     // ---------------------------------------
     const amountInLaari = Math.round(totalAmountMvr * 100);
 
     const paymentInsertPayload: Record<string, unknown> = {
       user_id: userId,
       course_id: courseId,
-      pricing_id: pricingId,        // ok if null
-      amount: amountInLaari,        // integer (LAARI)
-      total_amount: totalAmountMvr, // numeric (MVR)
-      currency: "MVR",
+      pricing_id: pricingId,
       payment_method: "bml",
       status: "pending",
+      currency: "MVR",
+      amount: amountInLaari,         // integer (laari)
+      total_amount: totalAmountMvr,  // numeric (MVR)
     };
 
     const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/payments?select=id`, {
       method: "POST",
       headers: {
         apikey: SUPABASE_ANON_KEY,
-        Authorization: authHeader, // ✅ this is what makes auth.uid() work
+        Authorization: authHeader,
         "Content-Type": "application/json",
         Prefer: "return=representation",
       },
@@ -134,77 +153,113 @@ serve(async (req) => {
     });
 
     const insertText = await insertRes.text();
-    let insertJson: any = insertText;
-    try { insertJson = JSON.parse(insertText); } catch {}
+    let insertData: any = insertText;
+    try {
+      insertData = JSON.parse(insertText);
+    } catch {
+      // keep text
+    }
 
     if (!insertRes.ok) {
-      // This will show 42501 details directly
-      return jsonResp(
-        { success: false, error: "Failed to create payment record", db: insertJson },
-        500
+      console.error("DB insert failed:", insertData);
+      return new Response(
+        JSON.stringify({ success: false, error: "Failed to create payment record", db: insertData }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
-    const paymentId = Array.isArray(insertJson) ? insertJson?.[0]?.id : insertJson?.id;
+    const paymentId = Array.isArray(insertData) ? insertData?.[0]?.id : insertData?.id;
     if (!paymentId) {
-      return jsonResp(
-        { success: false, error: "Payment insert succeeded but id missing", db: insertJson },
-        500
+      return new Response(
+        JSON.stringify({ success: false, error: "Payment insert succeeded but id missing", db: insertData }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
     // ---------------------------------------
-    // CALL BML
+    // BUILD BML PAYLOAD (LAARI)
     // ---------------------------------------
-    const bmlPayload = {
+    const payload = {
       amount: amountInLaari,
       currency: "MVR",
       redirectUrl: PAYMENT_REDIRECT_URL,
-      localId: paymentId, // best mapping key
+      localId: paymentId,
       customerReference: "ELC Course Payment",
     };
 
-    console.log("🚀 Payload sent to BML:", bmlPayload);
+    console.log("🚀 Payload sent to BML:", payload);
 
-    const bmlRes = await fetch(`${BML_API_URL}/public/v2/transactions`, {
+    // ---------------------------------------
+    // SEND REQUEST TO BML  ✅ (your requested format)
+    // ---------------------------------------
+    const response = await fetch(`${BML_API_URL}/public/v2/transactions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: BML_API_KEY,
+        "Accept": "application/json",
+        "Authorization": BML_API_KEY,
       },
-      body: JSON.stringify(bmlPayload),
+      body: JSON.stringify(payload),
     });
 
-    const bmlText = await bmlRes.text();
-    let bmlJson: any = bmlText;
-    try { bmlJson = JSON.parse(bmlText); } catch {}
+    const text = await response.text();
+    let data: any = text;
 
-    console.log("🔵 BML Response:", bmlJson);
-
-    if (!bmlRes.ok) {
-      return jsonResp(
-        { success: false, error: "BML create transaction failed", bml: bmlJson },
-        bmlRes.status
-      );
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.warn("⚠️ Non-JSON response from BML:", text);
     }
 
-    const paymentUrl = bmlJson?.shortUrl || bmlJson?.url || bmlJson?.redirectUrl || null;
+    console.log("🔵 BML Response:", data);
 
-    if (!paymentUrl) {
-      return jsonResp(
-        { success: false, error: "BML did not return redirect URL", raw: bmlJson },
-        500
-      );
+    if (!response.ok) {
+      // keep structure close to your working example,
+      // but also include success:false for frontend clarity
+      return new Response(JSON.stringify({ success: false, error: "BML create transaction failed", bml: data }), {
+        status: response.status,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+      });
     }
 
-    return jsonResp({
-      success: true,
-      paymentId,
-      paymentUrl,
-    });
+    // ---------------------------------------
+    // FIND BML REDIRECT URL
+    // ---------------------------------------
+    const redirectUrl =
+      data?.shortUrl || data?.url || data?.redirectUrl || null;
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        paymentId,
+        redirectUrl,
+        paymentUrl: redirectUrl, // ✅ alias for frontend
+        raw: data,
+      }),
+      {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+      }
+    );
   } catch (err: any) {
     console.error("🔥 ERROR:", err);
-    return jsonResp({ success: false, error: err?.message || "Unknown error" }, 500);
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
+      status: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json",
+      },
+    });
   }
 });

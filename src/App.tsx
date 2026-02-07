@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/context/AuthContext";
 import { ApplicationProvider } from "@/context/ApplicationContext";
@@ -29,7 +29,7 @@ import AuthCallback from "./pages/AuthCallback";
 /* Admin */
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminEnrollments from "./pages/admin/AdminEnrollments";
-import AdminCourses from "./pages/admin/AdminCourses"; // ✅ NEW
+import AdminCourses from "./pages/admin/AdminCourses";
 
 /* Fallback */
 import NotFound from "./pages/NotFound";
@@ -44,38 +44,39 @@ const App = () => (
           <TooltipProvider>
             <Toaster />
             <Sonner />
-            <BrowserRouter>
-              <Routes>
-                {/* Public */}
-                <Route path="/" element={<Index />} />
-                <Route path="/programs" element={<Programs />} />
-                <Route path="/course/:id" element={<CourseDetail />} />
-                <Route path="/gallery" element={<Gallery />} />
-                <Route path="/contact" element={<Contact />} />
 
-                {/* Application & payment flow */}
-                <Route path="/apply/:courseId" element={<Apply />} />
-                <Route path="/make-payment" element={<MakePayment />} />
-                <Route path="/checkout" element={<Checkout />} />
-                <Route path="/payment-success" element={<PaymentSuccess />} />
+            {/* 🚨 ROUTES ONLY — Router is in main.tsx */}
+            <Routes>
+              {/* Public */}
+              <Route path="/" element={<Index />} />
+              <Route path="/programs" element={<Programs />} />
+              <Route path="/course/:id" element={<CourseDetail />} />
+              <Route path="/gallery" element={<Gallery />} />
+              <Route path="/contact" element={<Contact />} />
 
-                {/* Auth */}
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
+              {/* Application & payment flow */}
+              <Route path="/apply/:courseId" element={<Apply />} />
+              <Route path="/make-payment" element={<MakePayment />} />
+              <Route path="/checkout" element={<Checkout />} />
 
-                {/* 🔐 Supabase email confirmation */}
-                <Route path="/auth/callback" element={<AuthCallback />} />
+              {/* ✅ MUST match BML redirect */}
+              <Route path="/payment/success" element={<PaymentSuccess />} />
 
-                {/* 🔐 Admin */}
-                <Route path="/admin/payments" element={<AdminPayments />} />
-                <Route path="/admin/enrollments" element={<AdminEnrollments />} />
-                <Route path="/admin/courses" element={<AdminCourses />} /> {/* ✅ NEW */}
+              {/* Auth */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
 
-                {/* Fallback */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
+              {/* Admin */}
+              <Route path="/admin/payments" element={<AdminPayments />} />
+              <Route path="/admin/enrollments" element={<AdminEnrollments />} />
+              <Route path="/admin/courses" element={<AdminCourses />} />
+
+              {/* Fallback */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+
           </TooltipProvider>
         </ApplicationProvider>
       </AuthProvider>
