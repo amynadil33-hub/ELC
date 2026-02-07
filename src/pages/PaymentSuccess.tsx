@@ -96,7 +96,7 @@ export default function PaymentSuccess() {
             {/* Support Info */}
             <p className="text-sm text-gray-500 mt-6">
               Have questions? Contact us at{" "}
-              <a href="mailto:info@elc.mv" className="text-[#1F6F43] hover:underline">
+              <a href="mailto:elc@everyones.com.mv" className="text-[#1F6F43] hover:underline">
                 info@elc.mv
               </a>
             </p>
