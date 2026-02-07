@@ -1,20 +1,19 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import Layout from '@/components/layout/Layout';
-import { useApplication } from '@/context/ApplicationContext';
-import { CheckCircle, Home, BookOpen, Phone, MessageCircle } from 'lucide-react';
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import Layout from "@/components/layout/Layout";
+import { useApplication } from "@/context/ApplicationContext";
+import { CheckCircle, Home, BookOpen, Phone, MessageCircle } from "lucide-react";
 
 export default function PaymentSuccess() {
   const location = useLocation();
   const { selectedCourse, clearApplication } = useApplication();
-  const paymentReference = location.state?.paymentReference || 'ELC-XXXXXX';
+
+  const params = new URLSearchParams(location.search);
+  const paymentId = params.get("payment_id");
 
   React.useEffect(() => {
-    // Clear application data after successful payment
-    return () => {
-      clearApplication();
-    };
-  }, []);
+    clearApplication();
+  }, [clearApplication]);
 
   return (
     <Layout>
@@ -30,15 +29,17 @@ export default function PaymentSuccess() {
             <h1 className="font-serif text-3xl font-bold text-[#2B2B2B] mb-4">
               Payment Successful!
             </h1>
-            
+
             <p className="text-gray-600 mb-6">
-              Thank you for enrolling at Everyone's Learning Centre. Your payment has been processed successfully.
+              Thank you for enrolling at Everyone&apos;s Learning Centre. We&apos;ve received your payment.
             </p>
 
             {/* Payment Reference */}
             <div className="bg-[#F4F6F8] rounded-lg p-4 mb-6">
               <p className="text-sm text-gray-500 mb-1">Payment Reference</p>
-              <p className="font-mono text-lg font-bold text-[#1F6F43]">{paymentReference}</p>
+              <p className="font-mono text-lg font-bold text-[#1F6F43]">
+                {paymentId || "N/A"}
+              </p>
             </div>
 
             {/* Course Info */}
@@ -56,7 +57,7 @@ export default function PaymentSuccess() {
 
             {/* Next Steps */}
             <div className="bg-[#C9A24D]/10 border border-[#C9A24D]/30 rounded-lg p-4 mb-8 text-left">
-              <h3 className="font-semibold text-[#2B2B2B] mb-3">What's Next?</h3>
+              <h3 className="font-semibold text-[#2B2B2B] mb-3">What&apos;s Next?</h3>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li className="flex items-start">
                   <MessageCircle className="w-4 h-4 text-[#C9A24D] mr-2 flex-shrink-0 mt-0.5" />
@@ -82,6 +83,7 @@ export default function PaymentSuccess() {
                 <BookOpen className="w-5 h-5 mr-2" />
                 View Programs
               </Link>
+
               <Link
                 to="/"
                 className="flex-1 inline-flex items-center justify-center bg-[#1F6F43] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#185a36] transition-colors"
@@ -93,7 +95,7 @@ export default function PaymentSuccess() {
 
             {/* Support Info */}
             <p className="text-sm text-gray-500 mt-6">
-              Have questions? Contact us at{' '}
+              Have questions? Contact us at{" "}
               <a href="mailto:info@elc.mv" className="text-[#1F6F43] hover:underline">
                 info@elc.mv
               </a>
