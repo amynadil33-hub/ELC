@@ -1,12 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
+// ✅ IMPORTANT: this is the flow you said was working before
+// If your project has ApplicationContext, keep this import.
+// If the import path differs, adjust it to your actual file.
+import { useApplication } from "@/context/ApplicationContext";
+
 type PaymentMode = "bml" | "transfer";
 
-// ✅ Change if needed
+// ✅ Change bucket name if yours is different
 const SLIP_BUCKET = "payment_slips";
 
 // Bank details
@@ -23,55 +28,72 @@ function sanitizeFileName(name: string) {
   return name.replace(/[^\w.\-]+/g, "_");
 }
 
+function getAmountFromCourse(course: any): number | null {
+  return (
+    toNumberSafe(course?.price) ??
+    toNumberSafe(course?.fee) ??
+    toNumberSafe(course?.amount) ??
+    toNumberSafe(course?.total_amount) ??
+    toNumberSafe(course?.totalAmount)
+  );
+}
+
 export default function MakePayment() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const params = useParams<{ courseId?: string }>();
+
+  const { selectedCourse } = useApplication() as any; // keep flexible
 
   const [mode, setMode] = useState<PaymentMode>("bml");
 
   const [courseId, setCourseId] = useState<string>("");
-  const [amount, setAmount] = useState<number | null>(null);
   const [courseTitle, setCourseTitle] = useState<string>("");
+  const [amount, setAmount] = useState<number | null>(null);
 
   const [loadingBml, setLoadingBml] = useState(false);
   const [loadingTransfer, setLoadingTransfer] = useState(false);
-
   const [slipFile, setSlipFile] = useState<File | null>(null);
 
-  // ---- Resolve inputs from query/state/params/localStorage
-  const resolvedInputs = useMemo(() => {
+  // 1) Resolve from query params / location.state / ApplicationContext / localStorage
+  const resolved = useMemo(() => {
     const qpCourseId = searchParams.get("courseId") || searchParams.get("course_id") || "";
     const qpAmount = searchParams.get("amount") || searchParams.get("total_amount") || "";
 
     const st: any = location.state || {};
-    const stateCourseId = st.courseId || st.course_id || "";
-    const stateAmount = st.amount || st.total_amount || st.totalAmount;
+    const stCourseId = st.courseId || st.course_id || st.id || "";
+    const stAmount = st.amount || st.total_amount || st.totalAmount;
 
-    const paramCourseId = params.courseId || "";
+    const ctxCourseId = selectedCourse?.id || "";
+    const ctxAmount = getAmountFromCourse(selectedCourse);
 
     const lsCourseId = localStorage.getItem("elc_course_id") || "";
     const lsAmount = localStorage.getItem("elc_amount") || "";
 
-    const finalCourseId = qpCourseId || stateCourseId || paramCourseId || lsCourseId;
-    const finalAmount = toNumberSafe(qpAmount || stateAmount || lsAmount);
+    const finalCourseId = qpCourseId || stCourseId || ctxCourseId || lsCourseId;
+    const finalAmount = toNumberSafe(qpAmount || stAmount || ctxAmount || lsAmount);
 
-    return { finalCourseId, finalAmount };
-  }, [location.state, params.courseId, searchParams]);
+    const finalTitle = selectedCourse?.title || st?.title || "";
 
+    return { finalCourseId, finalAmount, finalTitle };
+  }, [location.state, searchParams, selectedCourse]);
+
+  // 2) Apply resolved values + persist for refresh safety
   useEffect(() => {
-    if (resolvedInputs.finalCourseId) {
-      setCourseId(resolvedInputs.finalCourseId);
-      localStorage.setItem("elc_course_id", resolvedInputs.finalCourseId);
+    if (resolved.finalCourseId) {
+      setCourseId(resolved.finalCourseId);
+      localStorage.setItem("elc_course_id", resolved.finalCourseId);
     }
-    if (resolvedInputs.finalAmount) {
-      setAmount(resolvedInputs.finalAmount);
-      localStorage.setItem("elc_amount", String(resolvedInputs.finalAmount));
+    if (resolved.finalAmount) {
+      setAmount(resolved.finalAmount);
+      localStorage.setItem("elc_amount", String(resolved.finalAmount));
     }
-  }, [resolvedInputs.finalCourseId, resolvedInputs.finalAmount]);
+    if (resolved.finalTitle) {
+      setCourseTitle(resolved.finalTitle);
+    }
+  }, [resolved.finalCourseId, resolved.finalAmount, resolved.finalTitle]);
 
-  // ---- If courseId exists but amount missing, fetch course to derive amount
+  // 3) If we have courseId but still no amount, fetch from courses table
   useEffect(() => {
     const run = async () => {
       if (!courseId) return;
@@ -84,18 +106,13 @@ export default function MakePayment() {
         .single();
 
       if (error) {
-        console.error("Failed to fetch course for amount:", error);
+        console.error("Course fetch failed:", error);
         return;
       }
 
-      setCourseTitle(data?.title || "");
+      if (data?.title && !courseTitle) setCourseTitle(data.title);
 
-      const derived =
-        toNumberSafe(data?.price) ??
-        toNumberSafe(data?.fee) ??
-        toNumberSafe(data?.amount) ??
-        toNumberSafe(data?.total_amount);
-
+      const derived = getAmountFromCourse(data);
       if (derived) {
         setAmount(derived);
         localStorage.setItem("elc_amount", String(derived));
@@ -103,9 +120,9 @@ export default function MakePayment() {
     };
 
     run();
-  }, [courseId, amount]);
+  }, [courseId, amount, courseTitle]);
 
-  // ---- Session helper
+  // ---- session helper
   const requireSession = async () => {
     const {
       data: { session },
@@ -116,9 +133,8 @@ export default function MakePayment() {
     return session;
   };
 
-  // ---- BML
+  // ---- BML Pay (redirect to BML hosted card page)
   const handleBmlPay = async () => {
-    console.log("BML clicked");
     if (!courseId || !amount) {
       toast.error("Missing course or amount. Please go back and try again.");
       return;
@@ -132,7 +148,7 @@ export default function MakePayment() {
         return;
       }
 
-      // 🔑 CRITICAL: forward JWT explicitly so auth.uid() is NOT NULL in DB
+      // 🔑 CRITICAL: Forward JWT explicitly so auth.uid() is NOT NULL in DB
       const { data, error } = await supabase.functions.invoke("initiate-bml-payment-v2", {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -161,7 +177,7 @@ export default function MakePayment() {
     }
   };
 
-  // ---- Transfer slip validation
+  // ---- transfer slip validation
   const validateSlip = (file: File) => {
     const allowed = ["image/jpeg", "image/png", "application/pdf"];
     if (!allowed.includes(file.type)) return "Slip must be JPG, PNG, or PDF.";
@@ -170,11 +186,10 @@ export default function MakePayment() {
     return null;
   };
 
-  // ---- Manual transfer submit
+  // ---- manual transfer submit
   const handleTransferSubmit = async () => {
-    console.log("Transfer submit clicked");
     if (!courseId || !amount) {
-      toast.error("Missing course or amount. Please go back and try again.");
+      toast.error("Missing course or amount.");
       return;
     }
     if (!slipFile) {
@@ -196,15 +211,15 @@ export default function MakePayment() {
         return;
       }
 
-      // 1) Create payment row (minimal columns only)
+      // 1) Create payments row (pending)
       const { data: payment, error: insertErr } = await supabase
         .from("payments")
         .insert({
           user_id: session.user.id,
           course_id: courseId,
           total_amount: amount,
+          currency: "MVR", // remove ONLY if your payments table doesn't have this column
           status: "pending",
-          currency: "MVR", // remove ONLY if your table truly doesn't have it
         })
         .select("id")
         .single();
@@ -233,7 +248,7 @@ export default function MakePayment() {
         return;
       }
 
-      // 3) Save slip link if your payments table supports it (best effort)
+      // 3) Store slip URL/path (best-effort)
       const publicUrl = supabase.storage.from(SLIP_BUCKET).getPublicUrl(path).data.publicUrl;
 
       const tryUpdates = [
@@ -266,30 +281,24 @@ export default function MakePayment() {
 
         {missing ? (
           <div className="border rounded-lg p-5">
-            <p className="text-sm">
-              Missing payment details. Please return to the course page and try again.
-            </p>
-            <button
-              type="button"
-              className="mt-4 px-4 py-2 rounded-lg border"
-              onClick={() => navigate(-1)}
-            >
+            <p className="text-sm">Missing payment details. Please return to the course page and try again.</p>
+
+            <button type="button" className="mt-4 px-4 py-2 rounded-lg border" onClick={() => navigate(-1)}>
               Go Back
             </button>
 
             <div className="mt-4 text-xs text-gray-600">
-              <div>Debug:</div>
+              <div className="font-semibold mb-1">Debug (helps you find what broke):</div>
               <div>courseId: {String(courseId || "(empty)")}</div>
               <div>amount: {String(amount || "(empty)")}</div>
-              <div>
-                Tip: Navigate to this page like{" "}
-                <span className="font-mono">/make-payment?courseId=...&amp;amount=...</span>
+              <div>selectedCourse in context: {String(!!selectedCourse)}</div>
+              <div className="mt-2">
+                If this is empty now, the navigation stopped setting selectedCourse or state.
               </div>
             </div>
           </div>
         ) : (
           <>
-            {/* Header summary */}
             <div className="border rounded-lg p-4 mb-6">
               <div className="flex justify-between text-sm">
                 <span>Course</span>
@@ -301,7 +310,6 @@ export default function MakePayment() {
               </div>
             </div>
 
-            {/* Mode selector */}
             <div className="flex gap-2 mb-6">
               <button
                 type="button"
@@ -319,13 +327,10 @@ export default function MakePayment() {
               </button>
             </div>
 
-            {/* BML */}
             {mode === "bml" && (
               <div className="border rounded-lg p-5">
                 <h2 className="text-lg font-semibold mb-2">Pay via BML (Card)</h2>
-                <p className="text-sm mb-4">
-                  You will be redirected to the Bank of Maldives secure payment page.
-                </p>
+                <p className="text-sm mb-4">You will be redirected to the Bank of Maldives secure payment page.</p>
 
                 <button
                   type="button"
@@ -338,13 +343,10 @@ export default function MakePayment() {
               </div>
             )}
 
-            {/* Transfer */}
             {mode === "transfer" && (
               <div className="border rounded-lg p-5">
                 <h2 className="text-lg font-semibold mb-2">Manual Bank Transfer</h2>
-                <p className="text-sm mb-4">
-                  Transfer the amount to the bank account below, then upload the transfer slip.
-                </p>
+                <p className="text-sm mb-4">Transfer to the account below, then upload the slip.</p>
 
                 <div className="bg-gray-50 border rounded-lg p-4 mb-4 text-sm">
                   <div className="flex justify-between">
@@ -361,9 +363,7 @@ export default function MakePayment() {
                   </div>
                 </div>
 
-                <label className="block text-sm font-medium mb-2">
-                  Upload transfer slip (JPG/PNG/PDF)
-                </label>
+                <label className="block text-sm font-medium mb-2">Upload transfer slip (JPG/PNG/PDF)</label>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,application/pdf"
@@ -385,10 +385,6 @@ export default function MakePayment() {
                 >
                   {loadingTransfer ? "Submitting..." : "Submit Slip for Verification"}
                 </button>
-
-                <p className="text-xs mt-3 text-gray-600">
-                  After submission, an admin will verify and enroll you (no auto-enrollment).
-                </p>
               </div>
             )}
           </>
