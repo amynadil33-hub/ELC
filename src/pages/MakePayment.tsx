@@ -1,15 +1,15 @@
-import React, { useMemo, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useSearchParams, useParams } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 type PaymentMode = "bml" | "transfer";
 
-// ✅ Change this if your bucket name is different
+// ✅ Change if needed
 const SLIP_BUCKET = "payment_slips";
 
-// Bank details (as per your summary)
+// Bank details
 const BANK_NAME = "Bank of Maldives";
 const ACCOUNT_NAME = "Emir X Pvt Ltd";
 const ACCOUNT_NUMBER = "7730000761972";
@@ -19,32 +19,93 @@ function toNumberSafe(v: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function sanitizeFileName(name: string) {
+  return name.replace(/[^\w.\-]+/g, "_");
+}
+
 export default function MakePayment() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const params = useParams<{ courseId?: string }>();
 
   const [mode, setMode] = useState<PaymentMode>("bml");
+
+  const [courseId, setCourseId] = useState<string>("");
+  const [amount, setAmount] = useState<number | null>(null);
+  const [courseTitle, setCourseTitle] = useState<string>("");
+
   const [loadingBml, setLoadingBml] = useState(false);
   const [loadingTransfer, setLoadingTransfer] = useState(false);
 
   const [slipFile, setSlipFile] = useState<File | null>(null);
 
-  // ✅ Read courseId/amount from either query params OR location.state
-  const { courseId, amount } = useMemo(() => {
-    const qpCourseId = searchParams.get("courseId") || searchParams.get("course_id");
-    const qpAmount = searchParams.get("amount");
+  // ---- Resolve inputs from query/state/params/localStorage
+  const resolvedInputs = useMemo(() => {
+    const qpCourseId = searchParams.get("courseId") || searchParams.get("course_id") || "";
+    const qpAmount = searchParams.get("amount") || searchParams.get("total_amount") || "";
 
     const st: any = location.state || {};
-    const stateCourseId = st.courseId || st.course_id || st.id;
+    const stateCourseId = st.courseId || st.course_id || "";
     const stateAmount = st.amount || st.total_amount || st.totalAmount;
 
-    const finalCourseId = qpCourseId || stateCourseId || "";
-    const finalAmount = toNumberSafe(qpAmount ?? stateAmount);
+    const paramCourseId = params.courseId || "";
 
-    return { courseId: finalCourseId, amount: finalAmount };
-  }, [location.state, searchParams]);
+    const lsCourseId = localStorage.getItem("elc_course_id") || "";
+    const lsAmount = localStorage.getItem("elc_amount") || "";
 
+    const finalCourseId = qpCourseId || stateCourseId || paramCourseId || lsCourseId;
+    const finalAmount = toNumberSafe(qpAmount || stateAmount || lsAmount);
+
+    return { finalCourseId, finalAmount };
+  }, [location.state, params.courseId, searchParams]);
+
+  useEffect(() => {
+    if (resolvedInputs.finalCourseId) {
+      setCourseId(resolvedInputs.finalCourseId);
+      localStorage.setItem("elc_course_id", resolvedInputs.finalCourseId);
+    }
+    if (resolvedInputs.finalAmount) {
+      setAmount(resolvedInputs.finalAmount);
+      localStorage.setItem("elc_amount", String(resolvedInputs.finalAmount));
+    }
+  }, [resolvedInputs.finalCourseId, resolvedInputs.finalAmount]);
+
+  // ---- If courseId exists but amount missing, fetch course to derive amount
+  useEffect(() => {
+    const run = async () => {
+      if (!courseId) return;
+      if (amount) return;
+
+      const { data, error } = await supabase
+        .from("courses")
+        .select("id,title,price,fee,amount,total_amount")
+        .eq("id", courseId)
+        .single();
+
+      if (error) {
+        console.error("Failed to fetch course for amount:", error);
+        return;
+      }
+
+      setCourseTitle(data?.title || "");
+
+      const derived =
+        toNumberSafe(data?.price) ??
+        toNumberSafe(data?.fee) ??
+        toNumberSafe(data?.amount) ??
+        toNumberSafe(data?.total_amount);
+
+      if (derived) {
+        setAmount(derived);
+        localStorage.setItem("elc_amount", String(derived));
+      }
+    };
+
+    run();
+  }, [courseId, amount]);
+
+  // ---- Session helper
   const requireSession = async () => {
     const {
       data: { session },
@@ -55,7 +116,9 @@ export default function MakePayment() {
     return session;
   };
 
+  // ---- BML
   const handleBmlPay = async () => {
+    console.log("BML clicked");
     if (!courseId || !amount) {
       toast.error("Missing course or amount. Please go back and try again.");
       return;
@@ -69,15 +132,12 @@ export default function MakePayment() {
         return;
       }
 
-      // 🔑 CRITICAL: forward JWT explicitly
+      // 🔑 CRITICAL: forward JWT explicitly so auth.uid() is NOT NULL in DB
       const { data, error } = await supabase.functions.invoke("initiate-bml-payment-v2", {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: {
-          courseId,
-          amount,
-        },
+        body: { courseId, amount },
       });
 
       if (error) {
@@ -92,7 +152,6 @@ export default function MakePayment() {
         return;
       }
 
-      // ✅ Redirect to BML hosted card page
       window.location.href = data.paymentUrl;
     } catch (e) {
       console.error(e);
@@ -102,6 +161,7 @@ export default function MakePayment() {
     }
   };
 
+  // ---- Transfer slip validation
   const validateSlip = (file: File) => {
     const allowed = ["image/jpeg", "image/png", "application/pdf"];
     if (!allowed.includes(file.type)) return "Slip must be JPG, PNG, or PDF.";
@@ -110,7 +170,9 @@ export default function MakePayment() {
     return null;
   };
 
+  // ---- Manual transfer submit
   const handleTransferSubmit = async () => {
+    console.log("Transfer submit clicked");
     if (!courseId || !amount) {
       toast.error("Missing course or amount. Please go back and try again.");
       return;
@@ -134,15 +196,15 @@ export default function MakePayment() {
         return;
       }
 
-      // 1) Create payment row first (so we have an ID)
+      // 1) Create payment row (minimal columns only)
       const { data: payment, error: insertErr } = await supabase
         .from("payments")
         .insert({
           user_id: session.user.id,
           course_id: courseId,
           total_amount: amount,
-          currency: "MVR",
-          status: "pending", // admin will verify later
+          status: "pending",
+          currency: "MVR", // remove ONLY if your table truly doesn't have it
         })
         .select("id")
         .single();
@@ -155,55 +217,37 @@ export default function MakePayment() {
 
       const paymentId = payment.id as string;
 
-      // 2) Upload slip to storage
-      const ext = slipFile.name.split(".").pop() || "file";
-      const safeName = slipFile.name.replace(/[^\w.\-]+/g, "_");
+      // 2) Upload slip
+      const safeName = sanitizeFileName(slipFile.name);
       const path = `slips/${session.user.id}/${paymentId}/${Date.now()}-${safeName}`;
 
-      const { error: uploadErr } = await supabase.storage
-        .from(SLIP_BUCKET)
-        .upload(path, slipFile, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: slipFile.type,
-        });
+      const { error: uploadErr } = await supabase.storage.from(SLIP_BUCKET).upload(path, slipFile, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: slipFile.type,
+      });
 
       if (uploadErr) {
         console.error("Slip upload failed:", uploadErr);
-
-        // Keep the payment row, but inform user
         toast.error("Slip upload failed. Please try again.");
         return;
       }
 
-      // 3) Store slip path/url into the payment row (best effort)
-      // NOTE: If your column name differs, change it here.
+      // 3) Save slip link if your payments table supports it (best effort)
       const publicUrl = supabase.storage.from(SLIP_BUCKET).getPublicUrl(path).data.publicUrl;
 
-      // Try updating a couple of likely column names without breaking the flow
       const tryUpdates = [
         { slip_url: publicUrl, slip_path: path },
         { slip_url: publicUrl },
         { slip_path: path },
       ];
 
-      let updated = false;
       for (const payload of tryUpdates) {
         const { error: updErr } = await supabase.from("payments").update(payload).eq("id", paymentId);
-        if (!updErr) {
-          updated = true;
-          break;
-        }
-      }
-
-      if (!updated) {
-        // Not fatal — admin can still match by paymentId, file exists in bucket
-        console.warn("Could not update payment with slip link (check column names).");
+        if (!updErr) break;
       }
 
       toast.success("Slip submitted. Payment pending verification.");
-
-      // Send user to success page (same page used by BML return)
       navigate(`/payment/success?mode=transfer&paymentId=${encodeURIComponent(paymentId)}`);
     } catch (e) {
       console.error(e);
@@ -213,13 +257,15 @@ export default function MakePayment() {
     }
   };
 
+  const missing = !courseId || !amount;
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto p-6">
         <h1 className="text-2xl font-semibold mb-6">Make Payment</h1>
 
-        {!courseId || !amount ? (
-          <div className="border rounded-lg p-4">
+        {missing ? (
+          <div className="border rounded-lg p-5">
             <p className="text-sm">
               Missing payment details. Please return to the course page and try again.
             </p>
@@ -230,42 +276,47 @@ export default function MakePayment() {
             >
               Go Back
             </button>
+
+            <div className="mt-4 text-xs text-gray-600">
+              <div>Debug:</div>
+              <div>courseId: {String(courseId || "(empty)")}</div>
+              <div>amount: {String(amount || "(empty)")}</div>
+              <div>
+                Tip: Navigate to this page like{" "}
+                <span className="font-mono">/make-payment?courseId=...&amp;amount=...</span>
+              </div>
+            </div>
           </div>
         ) : (
           <>
+            {/* Header summary */}
+            <div className="border rounded-lg p-4 mb-6">
+              <div className="flex justify-between text-sm">
+                <span>Course</span>
+                <span className="font-semibold">{courseTitle || courseId}</span>
+              </div>
+              <div className="flex justify-between text-sm mt-2">
+                <span>Amount</span>
+                <span className="font-semibold">MVR {amount}</span>
+              </div>
+            </div>
+
             {/* Mode selector */}
             <div className="flex gap-2 mb-6">
               <button
                 type="button"
                 onClick={() => setMode("bml")}
-                className={`px-4 py-2 rounded-lg border ${
-                  mode === "bml" ? "bg-black text-white" : ""
-                }`}
+                className={`px-4 py-2 rounded-lg border ${mode === "bml" ? "bg-black text-white" : ""}`}
               >
                 BML Gateway
               </button>
-
               <button
                 type="button"
                 onClick={() => setMode("transfer")}
-                className={`px-4 py-2 rounded-lg border ${
-                  mode === "transfer" ? "bg-black text-white" : ""
-                }`}
+                className={`px-4 py-2 rounded-lg border ${mode === "transfer" ? "bg-black text-white" : ""}`}
               >
                 Manual Bank Transfer
               </button>
-            </div>
-
-            {/* Summary */}
-            <div className="border rounded-lg p-4 mb-6">
-              <div className="flex justify-between text-sm">
-                <span>Amount</span>
-                <span className="font-semibold">MVR {amount}</span>
-              </div>
-              <div className="flex justify-between text-sm mt-2">
-                <span>Course ID</span>
-                <span className="font-mono text-xs">{courseId}</span>
-              </div>
             </div>
 
             {/* BML */}
@@ -310,7 +361,9 @@ export default function MakePayment() {
                   </div>
                 </div>
 
-                <label className="block text-sm font-medium mb-2">Upload transfer slip (JPG/PNG/PDF)</label>
+                <label className="block text-sm font-medium mb-2">
+                  Upload transfer slip (JPG/PNG/PDF)
+                </label>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,application/pdf"
