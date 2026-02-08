@@ -14,6 +14,11 @@ import CourseDetail from "./pages/CourseDetail";
 import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
 
+/* ✅ NEW Policy pages */
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import RefundPolicy from "./pages/RefundPolicy";
+
 /* Application & payment */
 import Apply from "./pages/Apply";
 import MakePayment from "./pages/MakePayment";
@@ -54,6 +59,11 @@ const App = () => (
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/contact" element={<Contact />} />
 
+              {/* ✅ Policies (BML required) */}
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsAndConditions />} />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
+
               {/* Application & payment flow */}
               <Route path="/apply/:courseId" element={<Apply />} />
               <Route path="/make-payment" element={<MakePayment />} />
@@ -76,7 +86,6 @@ const App = () => (
               {/* Fallback */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-
           </TooltipProvider>
         </ApplicationProvider>
       </AuthProvider>

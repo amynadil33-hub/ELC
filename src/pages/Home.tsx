@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import Layout from '@/components/layout/Layout';
-import { IMAGES } from '@/lib/constants';
-import { supabase } from '@/lib/supabase';
-import { Course } from '@/types';
-import { SEED_COURSES, getFeaturedCourses } from '@/lib/seedData';
-import CourseCard from '@/components/ui/CourseCard';
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import Layout from "@/components/layout/Layout";
+import { IMAGES } from "@/lib/constants";
+import { supabase } from "@/lib/supabase";
+import { Course } from "@/types";
+import { getFeaturedCourses } from "@/lib/seedData";
+import CourseCard from "@/components/ui/CourseCard";
 import {
   GraduationCap,
   BookOpen,
@@ -16,7 +16,7 @@ import {
   CheckCircle,
   Star,
   Quote,
-} from 'lucide-react';
+} from "lucide-react";
 
 export default function Home() {
   const [featuredCourses, setFeaturedCourses] = useState<Course[]>([]);
@@ -28,19 +28,17 @@ export default function Home() {
 
   const fetchFeaturedCourses = async () => {
     try {
-      const { data, error } = await supabase.from('courses').select('*').limit(6);
+      const { data, error } = await supabase.from("courses").select("*").limit(6);
 
       if (error) throw error;
 
-      // Use database data if available, otherwise use seed data
       if (data && data.length > 0) {
         setFeaturedCourses(data);
       } else {
         setFeaturedCourses(getFeaturedCourses());
       }
     } catch (error) {
-      console.error('Error fetching courses:', error);
-      // Fallback to seed data on error
+      console.error("Error fetching courses:", error);
       setFeaturedCourses(getFeaturedCourses());
     } finally {
       setLoading(false);
@@ -48,55 +46,51 @@ export default function Home() {
   };
 
   const stats = [
-    { icon: Calendar, value: 'Since 2001', label: 'Years of Excellence' },
-    { icon: Users, value: '10,000+', label: 'Students Taught' },
-    { icon: GraduationCap, value: 'Cambridge', label: 'Focused Curriculum' },
-    { icon: Award, value: 'O-Level', label: 'Exam Ready' },
+    { icon: Calendar, value: "Since 2001", label: "Years of Excellence" },
+    { icon: Users, value: "10,000+", label: "Students Taught" },
+    { icon: GraduationCap, value: "Cambridge", label: "Focused Curriculum" },
+    { icon: Award, value: "O-Level", label: "Exam Ready" },
   ];
 
   const features = [
     {
-      title: 'Cambridge-Aligned Curriculum',
-      description:
-        'Our programs follow Cambridge standards, preparing students for academic excellence.',
+      title: "Cambridge-Aligned Curriculum",
+      description: "Our programs follow Cambridge standards, preparing students for academic excellence.",
     },
     {
-      title: 'Experienced Educators',
-      description:
-        'Learn from dedicated teachers with years of experience in English-medium education.',
+      title: "Experienced Educators",
+      description: "Learn from dedicated teachers with years of experience in English-medium education.",
     },
     {
-      title: 'Small Class Sizes',
-      description:
-        'Personalized attention ensures every student reaches their full potential.',
+      title: "Small Class Sizes",
+      description: "Personalized attention ensures every student reaches their full potential.",
     },
     {
-      title: 'Proven Track Record',
-      description:
-        'Thousands of successful students who have excelled in O-Level examinations.',
+      title: "Proven Track Record",
+      description: "Thousands of successful students who have excelled in O-Level examinations.",
     },
   ];
 
   const testimonials = [
     {
-      name: 'Parent of Ahmed',
-      role: 'Level 4 Student',
+      name: "Parent of Ahmed",
+      role: "Level 4 Student",
       content:
         "ELC has transformed my son's English proficiency. The teachers are dedicated and the curriculum is excellent.",
       image: IMAGES.students[0],
     },
     {
-      name: 'Parent of Aisha',
-      role: 'O-Level Graduate',
+      name: "Parent of Aisha",
+      role: "O-Level Graduate",
       content:
         "My daughter achieved an A* in her O-Level English exam thanks to ELC's comprehensive preparation program.",
       image: IMAGES.students[1],
     },
     {
-      name: 'Parent of Mohamed',
-      role: 'Level 3 Student',
+      name: "Parent of Mohamed",
+      role: "Level 3 Student",
       content:
-        'The enrichment programs have helped my child develop not just academically but also in confidence and creativity.',
+        "The enrichment programs have helped my child develop not just academically but also in confidence and creativity.",
       image: IMAGES.students[2],
     },
   ];
@@ -106,11 +100,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative bg-[#1F6F43] overflow-hidden">
         <div className="absolute inset-0">
-          <img
-            src={IMAGES.hero}
-            alt="Students learning"
-            className="w-full h-full object-cover opacity-20"
-          />
+          <img src={IMAGES.hero} alt="Students learning" className="w-full h-full object-cover opacity-20" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#1F6F43] via-[#1F6F43]/90 to-[#1F6F43]/70" />
         </div>
 
@@ -123,17 +113,14 @@ export default function Home() {
               </div>
 
               <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
-                Building Academic
-                <span className="text-[#C9A24D]"> Excellence</span>
+                Building Academic<span className="text-[#C9A24D]"> Excellence</span>
               </h1>
 
               <p className="text-white/90 text-lg md:text-xl mb-8 leading-relaxed">
-                Everyone&apos;s Learning Centre empowers students in the Maldives with quality English
-                education and comprehensive academic programs. From ages 4 to 16, we prepare students
-                for success.
+                Everyone&apos;s Learning Centre empowers students in the Maldives with quality English education and
+                comprehensive academic programs. From ages 4 to 16, we prepare students for success.
               </p>
 
-              {/* ✅ ONLY CHANGE: Student Portal button added here */}
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
                   to="/programs"
@@ -164,28 +151,12 @@ export default function Home() {
             <div className="hidden lg:block">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-4">
-                  <img
-                    src={IMAGES.students[0]}
-                    alt="Student learning"
-                    className="rounded-xl shadow-2xl"
-                  />
-                  <img
-                    src={IMAGES.graduation[0]}
-                    alt="Graduation"
-                    className="rounded-xl shadow-2xl"
-                  />
+                  <img src={IMAGES.students[0]} alt="Student learning" className="rounded-xl shadow-2xl" />
+                  <img src={IMAGES.graduation[0]} alt="Graduation" className="rounded-xl shadow-2xl" />
                 </div>
                 <div className="space-y-4 pt-8">
-                  <img
-                    src={IMAGES.students[1]}
-                    alt="Student studying"
-                    className="rounded-xl shadow-2xl"
-                  />
-                  <img
-                    src={IMAGES.chess[0]}
-                    alt="Chess program"
-                    className="rounded-xl shadow-2xl"
-                  />
+                  <img src={IMAGES.students[1]} alt="Student studying" className="rounded-xl shadow-2xl" />
+                  <img src={IMAGES.chess[0]} alt="Chess program" className="rounded-xl shadow-2xl" />
                 </div>
               </div>
             </div>
@@ -203,9 +174,7 @@ export default function Home() {
                   <div className="inline-flex items-center justify-center w-14 h-14 bg-[#1F6F43]/10 rounded-full mb-4">
                     <stat.icon className="w-7 h-7 text-[#1F6F43]" />
                   </div>
-                  <div className="text-2xl md:text-3xl font-bold text-[#1F6F43] mb-1">
-                    {stat.value}
-                  </div>
+                  <div className="text-2xl md:text-3xl font-bold text-[#1F6F43] mb-1">{stat.value}</div>
                   <div className="text-gray-600 text-sm">{stat.label}</div>
                 </div>
               ))}
@@ -226,14 +195,14 @@ export default function Home() {
               <div className="w-20 h-1 bg-[#C9A24D] mb-6" />
 
               <p className="text-gray-600 text-lg mb-6 leading-relaxed">
-                Founded in 2001 by <strong>Mariyam Shadiya</strong>, Everyone&apos;s Learning Centre
-                has been at the forefront of English education in the Maldives for over two decades.
+                Founded in 2001 by <strong>Mariyam Shadiya</strong>, Everyone&apos;s Learning Centre has been at the
+                forefront of English education in the Maldives for over two decades.
               </p>
 
               <p className="text-gray-600 mb-6 leading-relaxed">
-                Our mission is to strengthen English proficiency for students in English-medium
-                schools and adult learners. We have reached tens of thousands of students across the
-                Maldives, helping them achieve academic excellence.
+                Our mission is to strengthen English proficiency for students in English-medium schools and adult
+                learners. We have reached tens of thousands of students across the Maldives, helping them achieve
+                academic excellence.
               </p>
 
               <div className="space-y-4">
@@ -258,26 +227,10 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <img
-                src={IMAGES.students[2]}
-                alt="Student learning"
-                className="rounded-xl shadow-lg"
-              />
-              <img
-                src={IMAGES.students[3]}
-                alt="Classroom"
-                className="rounded-xl shadow-lg mt-8"
-              />
-              <img
-                src={IMAGES.olevel[0]}
-                alt="O-Level preparation"
-                className="rounded-xl shadow-lg"
-              />
-              <img
-                src={IMAGES.graduation[1]}
-                alt="Achievement"
-                className="rounded-xl shadow-lg mt-8"
-              />
+              <img src={IMAGES.students[2]} alt="Student learning" className="rounded-xl shadow-lg" />
+              <img src={IMAGES.students[3]} alt="Classroom" className="rounded-xl shadow-lg mt-8" />
+              <img src={IMAGES.olevel[0]} alt="O-Level preparation" className="rounded-xl shadow-lg" />
+              <img src={IMAGES.graduation[1]} alt="Achievement" className="rounded-xl shadow-lg mt-8" />
             </div>
           </div>
         </div>
@@ -287,13 +240,11 @@ export default function Home() {
       <section className="py-20 bg-[#1F6F43]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold text-white mb-4">
-              Our Mission
-            </h2>
+            <h2 className="font-serif text-3xl md:text-4xl font-bold text-white mb-4">Our Mission</h2>
             <div className="w-20 h-1 bg-[#C9A24D] mx-auto mb-6" />
             <p className="text-white/90 text-lg max-w-3xl mx-auto">
-              To provide exceptional English education that empowers students to excel academically
-              and develop the confidence to succeed in an increasingly global world.
+              To provide exceptional English education that empowers students to excel academically and develop the
+              confidence to succeed in an increasingly global world.
             </p>
           </div>
 
@@ -319,17 +270,11 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="order-2 lg:order-1">
-              <img
-                src={IMAGES.students[0]}
-                alt="Young learner"
-                className="rounded-2xl shadow-xl"
-              />
+              <img src={IMAGES.students[0]} alt="Young learner" className="rounded-2xl shadow-xl" />
             </div>
 
             <div className="order-1 lg:order-2">
-              <span className="text-[#C9A24D] font-semibold text-sm uppercase tracking-wider">
-                Early Learning
-              </span>
+              <span className="text-[#C9A24D] font-semibold text-sm uppercase tracking-wider">Early Learning</span>
               <h2 className="font-serif text-3xl md:text-4xl font-bold text-[#2B2B2B] mt-2 mb-6">
                 The Best Age to Start: <span className="text-[#1F6F43]">Around 4 Years</span>
               </h2>
@@ -337,29 +282,22 @@ export default function Home() {
               <div className="w-20 h-1 bg-[#C9A24D] mb-6" />
 
               <p className="text-gray-600 text-lg mb-6 leading-relaxed">
-                Research shows that children around age 4 are at the optimal stage for language
-                acquisition. At ELC, our Pioneer program (Level 1) is specifically designed for this
-                crucial developmental period.
+                Research shows that children around age 4 are at the optimal stage for language acquisition. At ELC, our
+                Pioneer program (Level 1) is specifically designed for this crucial developmental period.
               </p>
 
               <ul className="space-y-4 mb-8">
                 <li className="flex items-start">
                   <Star className="w-5 h-5 text-[#C9A24D] mr-3 flex-shrink-0 mt-1" />
-                  <span className="text-gray-600">
-                    Natural language absorption during critical development years
-                  </span>
+                  <span className="text-gray-600">Natural language absorption during critical development years</span>
                 </li>
                 <li className="flex items-start">
                   <Star className="w-5 h-5 text-[#C9A24D] mr-3 flex-shrink-0 mt-1" />
-                  <span className="text-gray-600">
-                    Building strong foundations for future academic success
-                  </span>
+                  <span className="text-gray-600">Building strong foundations for future academic success</span>
                 </li>
                 <li className="flex items-start">
                   <Star className="w-5 h-5 text-[#C9A24D] mr-3 flex-shrink-0 mt-1" />
-                  <span className="text-gray-600">
-                    Fun, engaging activities that make learning enjoyable
-                  </span>
+                  <span className="text-gray-600">Fun, engaging activities that make learning enjoyable</span>
                 </li>
               </ul>
 
@@ -379,13 +317,10 @@ export default function Home() {
       <section className="py-20 bg-[#F4F6F8]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold text-[#2B2B2B] mb-4">
-              Featured Programs
-            </h2>
+            <h2 className="font-serif text-3xl md:text-4xl font-bold text-[#2B2B2B] mb-4">Featured Programs</h2>
             <div className="w-20 h-1 bg-[#C9A24D] mx-auto mb-6" />
             <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-              Discover our comprehensive range of programs designed to help students excel at every
-              level.
+              Discover our comprehensive range of programs designed to help students excel at every level.
             </p>
           </div>
 
@@ -424,9 +359,7 @@ export default function Home() {
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold text-[#2B2B2B] mb-4">
-              What Parents Say
-            </h2>
+            <h2 className="font-serif text-3xl md:text-4xl font-bold text-[#2B2B2B] mb-4">What Parents Say</h2>
             <div className="w-20 h-1 bg-[#C9A24D] mx-auto mb-6" />
             <p className="text-gray-600 text-lg max-w-2xl mx-auto">
               Hear from parents whose children have thrived at Everyone&apos;s Learning Centre.
@@ -467,8 +400,8 @@ export default function Home() {
             Ready to Start Your Child&apos;s Journey?
           </h2>
           <p className="text-white/90 text-lg mb-8 max-w-2xl mx-auto">
-            Join thousands of students who have achieved academic excellence at Everyone&apos;s Learning
-            Centre. Enroll today and give your child the gift of quality education.
+            Join thousands of students who have achieved academic excellence at Everyone&apos;s Learning Centre. Enroll
+            today and give your child the gift of quality education.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
