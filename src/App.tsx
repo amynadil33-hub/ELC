@@ -14,11 +14,6 @@ import CourseDetail from "./pages/CourseDetail";
 import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
 
-/* ✅ NEW Policy pages */
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsAndConditions from "./pages/TermsAndConditions";
-import RefundPolicy from "./pages/RefundPolicy";
-
 /* Application & payment */
 import Apply from "./pages/Apply";
 import MakePayment from "./pages/MakePayment";
@@ -34,7 +29,14 @@ import AuthCallback from "./pages/AuthCallback";
 /* Admin */
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminEnrollments from "./pages/admin/AdminEnrollments";
-import AdminCourses from "./pages/admin/AdminCourses";
+
+/* Policies */
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import RefundPolicy from "./pages/RefundPolicy";
+
+/* Temporary page */
+import RamazanTimings from "./pages/RamazanTimings";
 
 /* Fallback */
 import NotFound from "./pages/NotFound";
@@ -50,7 +52,7 @@ const App = () => (
             <Toaster />
             <Sonner />
 
-            {/* 🚨 ROUTES ONLY — Router is in main.tsx */}
+            {/* ✅ ROUTES ONLY — BrowserRouter must be ONLY in main.tsx */}
             <Routes>
               {/* Public */}
               <Route path="/" element={<Index />} />
@@ -59,18 +61,15 @@ const App = () => (
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/contact" element={<Contact />} />
 
-              {/* ✅ Policies (BML required) */}
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="/terms" element={<TermsAndConditions />} />
-              <Route path="/refund-policy" element={<RefundPolicy />} />
-
               {/* Application & payment flow */}
               <Route path="/apply/:courseId" element={<Apply />} />
               <Route path="/make-payment" element={<MakePayment />} />
               <Route path="/checkout" element={<Checkout />} />
 
-              {/* ✅ MUST match BML redirect */}
+              {/* ✅ BML redirect MUST match this */}
               <Route path="/payment/success" element={<PaymentSuccess />} />
+              {/* (Optional) keep old route working too */}
+              <Route path="/payment-success" element={<PaymentSuccess />} />
 
               {/* Auth */}
               <Route path="/login" element={<Login />} />
@@ -78,10 +77,17 @@ const App = () => (
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
 
+              {/* Policies */}
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsAndConditions />} />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
+
+              {/* Temporary */}
+              <Route path="/ramazan-timings" element={<RamazanTimings />} />
+
               {/* Admin */}
               <Route path="/admin/payments" element={<AdminPayments />} />
               <Route path="/admin/enrollments" element={<AdminEnrollments />} />
-              <Route path="/admin/courses" element={<AdminCourses />} />
 
               {/* Fallback */}
               <Route path="*" element={<NotFound />} />
