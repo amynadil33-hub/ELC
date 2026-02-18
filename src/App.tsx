@@ -27,6 +27,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import AuthCallback from "./pages/AuthCallback";
 
 /* Admin */
+import AdminCourses from "./pages/admin/AdminCourses";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminEnrollments from "./pages/admin/AdminEnrollments";
 
