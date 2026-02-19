@@ -1,76 +1,102 @@
-import React, { useEffect, useState } from 'react';
-import Layout from '@/components/layout/Layout';
-import CourseCard from '@/components/ui/CourseCard';
-import { supabase } from '@/lib/supabase';
-import { Course } from '@/types';
-import { CATEGORIES } from '@/lib/constants';
-import { SEED_COURSES } from '@/lib/seedData';
-import { ChevronDown, ChevronUp, Search, Filter, BookOpen } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from "react";
+import Layout from "@/components/layout/Layout";
+import CourseCard from "@/components/ui/CourseCard";
+import { supabase } from "@/lib/supabase";
+import { Course } from "@/types";
+import { SEED_COURSES } from "@/lib/seedData";
+import { ChevronDown, ChevronUp, Search, Filter, BookOpen } from "lucide-react";
 
 export default function Programs() {
   const [courses, setCourses] = useState<Course[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(CATEGORIES);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCourses();
   }, []);
 
+  useEffect(() => {
+    // Auto-expand all categories when they load
+    setExpandedCategories(categories);
+  }, [categories]);
+
   const fetchCourses = async () => {
     try {
       const { data, error } = await supabase
-        .from('courses')
-        .select('*')
-        .eq('status', true)
-        .order('category', { ascending: true })
-        .order('sort_order', { ascending: true });
+        .from("courses")
+        .select("*")
+        .eq("status", true)
+        .order("category", { ascending: true })
+        .order("sort_order", { ascending: true });
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        setCourses(data);
-      } else {
-        // Temporary fallback until all courses are in Supabase
-        setCourses(SEED_COURSES);
-      }
+      const sourceData =
+        data && data.length > 0 ? data : SEED_COURSES;
+
+      setCourses(sourceData);
+
+      // Generate unique categories dynamically
+      const uniqueCategories = [
+        ...new Set(
+          sourceData
+            .map((course) => course.category)
+            .filter(Boolean)
+        ),
+      ] as string[];
+
+      setCategories(uniqueCategories);
     } catch (error) {
-      console.error('Error fetching courses:', error);
+      console.error("Error fetching courses:", error);
       setCourses(SEED_COURSES);
+
+      const fallbackCategories = [
+        ...new Set(
+          SEED_COURSES.map((course) => course.category).filter(Boolean)
+        ),
+      ] as string[];
+
+      setCategories(fallbackCategories);
     } finally {
       setLoading(false);
     }
   };
 
   const toggleCategory = (category: string) => {
-    setExpandedCategories(prev =>
+    setExpandedCategories((prev) =>
       prev.includes(category)
-        ? prev.filter(c => c !== category)
+        ? prev.filter((c) => c !== category)
         : [...prev, category]
     );
   };
 
-  const filteredCourses = courses.filter(course => {
-    const matchesSearch =
-      course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.subjects?.some(s =>
-        s.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCourses = useMemo(() => {
+    return courses.filter((course) => {
+      const matchesSearch =
+        course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.subjects?.some((s) =>
+          s.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+      const matchesCategory =
+        !selectedCategory || course.category === selectedCategory;
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [courses, searchTerm, selectedCategory]);
+
+  const coursesByCategory = useMemo(() => {
+    return categories.reduce((acc, category) => {
+      acc[category] = filteredCourses.filter(
+        (course) => course.category === category
       );
-
-    const matchesCategory =
-      !selectedCategory || course.category === selectedCategory;
-
-    return matchesSearch && matchesCategory;
-  });
-
-  const coursesByCategory = CATEGORIES.reduce((acc, category) => {
-    acc[category] = filteredCourses.filter(
-      course => course.category === category
-    );
-    return acc;
-  }, {} as Record<string, Course[]>);
+      return acc;
+    }, {} as Record<string, Course[]>);
+  }, [categories, filteredCourses]);
 
   const getCategoryIcon = () => (
     <BookOpen className="w-6 h-6 text-[#1F6F43]" />
@@ -78,9 +104,9 @@ export default function Programs() {
 
   return (
     <Layout>
-      {/* Hero Section */}
+      {/* Hero */}
       <section className="bg-[#1F6F43] py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="max-w-7xl mx-auto px-4 text-center">
           <h1 className="font-serif text-4xl md:text-5xl font-bold text-white mb-4">
             Our Programs
           </h1>
@@ -90,9 +116,9 @@ export default function Programs() {
         </div>
       </section>
 
-      {/* Search and Filter */}
+      {/* Search + Filter */}
       <section className="bg-white py-6 border-b sticky top-20 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row gap-4">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
@@ -107,12 +133,14 @@ export default function Programs() {
           <div className="relative">
             <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
             <select
-              value={selectedCategory || ''}
-              onChange={(e) => setSelectedCategory(e.target.value || null)}
+              value={selectedCategory || ""}
+              onChange={(e) =>
+                setSelectedCategory(e.target.value || null)
+              }
               className="pl-12 pr-8 py-3 border rounded-lg focus:ring-2 focus:ring-[#1F6F43]"
             >
               <option value="">All Categories</option>
-              {CATEGORIES.map(category => (
+              {categories.map((category) => (
                 <option key={category} value={category}>
                   {category}
                 </option>
@@ -122,18 +150,27 @@ export default function Programs() {
         </div>
       </section>
 
-      {/* Programs List */}
+      {/* Programs */}
       <section className="py-12 bg-[#F4F6F8]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4">
           {loading ? (
-            <div className="text-center py-16 text-gray-500">Loading programs…</div>
+            <div className="text-center py-16 text-gray-500">
+              Loading programs…
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="text-center py-16 text-gray-500">
+              No programs available.
+            </div>
           ) : (
             <div className="space-y-8">
-              {CATEGORIES.map(category => {
-                const categoryCourses = coursesByCategory[category];
+              {categories.map((category) => {
+                const categoryCourses =
+                  coursesByCategory[category] || [];
+
                 if (!categoryCourses.length) return null;
 
-                const isExpanded = expandedCategories.includes(category);
+                const isExpanded =
+                  expandedCategories.includes(category);
 
                 return (
                   <div key={category} className="bg-white rounded-xl shadow">
@@ -163,8 +200,11 @@ export default function Programs() {
 
                     {isExpanded && (
                       <div className="px-6 pb-6 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {categoryCourses.map(course => (
-                          <CourseCard key={course.id} course={course} />
+                        {categoryCourses.map((course) => (
+                          <CourseCard
+                            key={course.id}
+                            course={course}
+                          />
                         ))}
                       </div>
                     )}
