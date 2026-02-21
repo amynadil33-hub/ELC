@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 import Layout from "@/components/layout/Layout";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -13,7 +14,7 @@ type CourseRow = {
   subjects: string[] | null;
   schedule: string | null;
   duration: string | null;
-  fee: number | null;
+  fee: number | null; // legacy/display convenience
   image_url: string | null;
   status: boolean | null;
   sort_order: number | null;
@@ -27,10 +28,15 @@ type CourseForm = {
   category: string;
   age_range: string;
   description: string;
-  subjects_csv: string; // comma separated
+  subjects_csv: string;
   schedule: string;
   duration: string;
-  fee: string; // keep as string for input
+
+  // ✅ NEW: three pricing fields
+  fee_monthly: string;
+  fee_term: string;
+  fee_annual: string;
+
   image_url: string;
   status: boolean;
   sort_order: string;
@@ -46,7 +52,11 @@ const emptyForm: CourseForm = {
   subjects_csv: "",
   schedule: "",
   duration: "",
-  fee: "",
+
+  fee_monthly: "",
+  fee_term: "",
+  fee_annual: "",
+
   image_url: "",
   status: true,
   sort_order: "",
@@ -72,7 +82,13 @@ function formFromRow(row: CourseRow): CourseForm {
     subjects_csv: (row.subjects ?? []).join(", "),
     schedule: row.schedule ?? "",
     duration: row.duration ?? "",
-    fee: row.fee === null || row.fee === undefined ? "" : String(row.fee),
+
+    // Default annual to courses.fee (fallback), real values loaded from course_pricing in startEdit()
+    fee_monthly: "",
+    fee_term: "",
+    fee_annual:
+      row.fee === null || row.fee === undefined ? "" : String(row.fee),
+
     image_url: row.image_url ?? "",
     status: row.status ?? true,
     sort_order:
@@ -82,6 +98,18 @@ function formFromRow(row: CourseRow): CourseForm {
     grades: row.grades ?? "",
     learning_outcomes: row.learning_outcomes ?? "",
   };
+}
+
+type PricingRow = {
+  id: string;
+  billing_period: string | null;
+  amount: number | null;
+  is_active: boolean | null;
+  created_at: string | null;
+};
+
+function isWholeNumberString(v: string) {
+  return /^\d+$/.test(v);
 }
 
 export default function AdminCourses() {
@@ -145,10 +173,61 @@ export default function AdminCourses() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const startEdit = (row: CourseRow) => {
+  // ✅ Load pricing rows and fill monthly/term/annual fields
+  const loadPricingIntoForm = async (courseId: string) => {
+    const { data, error } = await supabase
+      .from("course_pricing")
+      .select("id,billing_period,amount,is_active,created_at")
+      .eq("course_id", courseId);
+
+    if (error) {
+      console.error(error);
+      toast.error("Failed to load course pricing");
+      return;
+    }
+
+    const rows = (data ?? []) as PricingRow[];
+
+    // Prefer active rows; otherwise fallback to newest
+    const pick = (period: "monthly" | "term" | "annual") => {
+      const active = rows.find(
+        (r) =>
+          (r.billing_period ?? "").toLowerCase() === period &&
+          r.is_active === true &&
+          r.amount !== null
+      );
+      if (active) return active.amount;
+
+      const any = rows
+        .filter((r) => (r.billing_period ?? "").toLowerCase() === period)
+        .sort((a, b) => {
+          const ad = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bd = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return bd - ad;
+        })[0];
+
+      return any?.amount ?? null;
+    };
+
+    const monthly = pick("monthly");
+    const term = pick("term");
+    const annual = pick("annual");
+
+    setForm((prev) => ({
+      ...prev,
+      fee_monthly: monthly === null ? prev.fee_monthly : String(monthly),
+      fee_term: term === null ? prev.fee_term : String(term),
+      fee_annual: annual === null ? prev.fee_annual : String(annual),
+    }));
+  };
+
+  const startEdit = async (row: CourseRow) => {
     setEditingId(row.id);
     setForm(formFromRow(row));
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    // Load pricing into the three fee fields
+    await loadPricingIntoForm(row.id);
   };
 
   const cancelEdit = () => {
@@ -158,7 +237,7 @@ export default function AdminCourses() {
 
   const onChange =
     (key: keyof CourseForm) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const value =
         e.target.type === "checkbox"
           ? (e.target as HTMLInputElement).checked
@@ -170,8 +249,89 @@ export default function AdminCourses() {
   const validate = (): string | null => {
     if (!form.title.trim()) return "Title is required";
     if (!form.category.trim()) return "Category is required";
-    // others can be blank if you want
+
+    const m = form.fee_monthly.trim();
+    const t = form.fee_term.trim();
+    const a = form.fee_annual.trim();
+
+    if (!m && !t && !a) return "Please enter at least one fee (Monthly, Term, or Annual)";
+
+    if (m && !isWholeNumberString(m)) return "Monthly fee must be a whole number (e.g. 1200)";
+    if (t && !isWholeNumberString(t)) return "Term fee must be a whole number (e.g. 1200)";
+    if (a && !isWholeNumberString(a)) return "Annual fee must be a whole number (e.g. 1200)";
+
     return null;
+  };
+
+  // Robust helper: get 1 row id for a specific period (prefer active, then latest)
+  const getPriceRowIdByPeriod = async (
+    courseId: string,
+    period: "monthly" | "term" | "annual"
+  ) => {
+    const { data, error } = await supabase
+      .from("course_pricing")
+      .select("id,is_active,created_at")
+      .eq("course_id", courseId)
+      .eq("billing_period", period)
+      .order("is_active", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+    return (data?.[0] as { id: string } | undefined)?.id ?? null;
+  };
+
+  const upsertPricing = async (args: {
+    courseId: string;
+    period: "monthly" | "term" | "annual";
+    amount: number | null;
+    sortOrder: number;
+  }) => {
+    const { courseId, period, amount, sortOrder } = args;
+    const existingId = await getPriceRowIdByPeriod(courseId, period);
+
+    const label =
+      period === "monthly" ? "Monthly Fee" : period === "term" ? "Term Fee" : "Annual Fee";
+
+    if (amount !== null) {
+      if (existingId) {
+        const { error } = await supabase
+          .from("course_pricing")
+          .update({
+            label,
+            amount,
+            currency: "MVR",
+            billing_period: period,
+            sort_order: sortOrder,
+            is_active: true,
+          })
+          .eq("id", existingId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("course_pricing").insert({
+          course_id: courseId,
+          label,
+          amount,
+          currency: "MVR",
+          billing_period: period,
+          sort_order: sortOrder,
+          is_active: true,
+        });
+
+        if (error) throw error;
+      }
+    } else {
+      // cleared -> deactivate existing row if it exists
+      if (existingId) {
+        const { error } = await supabase
+          .from("course_pricing")
+          .update({ is_active: false })
+          .eq("id", existingId);
+
+        if (error) throw error;
+      }
+    }
   };
 
   const save = async () => {
@@ -183,6 +343,19 @@ export default function AdminCourses() {
 
     setSaving(true);
 
+    const monthlyRaw = form.fee_monthly.trim();
+    const termRaw = form.fee_term.trim();
+    const annualRaw = form.fee_annual.trim();
+
+    const monthlyAmt = monthlyRaw ? Number(monthlyRaw) : null;
+    const termAmt = termRaw ? Number(termRaw) : null;
+    const annualAmt = annualRaw ? Number(annualRaw) : null;
+
+    // Keep courses.fee populated for legacy display:
+    // prefer annual -> term -> monthly
+    const legacyFee =
+      annualAmt !== null ? annualAmt : termAmt !== null ? termAmt : monthlyAmt;
+
     const payload = {
       title: form.title.trim(),
       category: form.category.trim(),
@@ -191,7 +364,7 @@ export default function AdminCourses() {
       subjects: toSubjectsArray(form.subjects_csv),
       schedule: form.schedule.trim() || null,
       duration: form.duration.trim() || null,
-      fee: form.fee.trim() ? Number(form.fee) : null,
+      fee: legacyFee ?? null, // ✅ keep legacy column in sync
       image_url: form.image_url.trim() || null,
       status: form.status,
       sort_order: form.sort_order.trim() ? Number(form.sort_order) : null,
@@ -201,6 +374,7 @@ export default function AdminCourses() {
 
     try {
       if (editingId) {
+        // 1) Update course row
         const { error } = await supabase
           .from("courses")
           .update(payload)
@@ -208,11 +382,26 @@ export default function AdminCourses() {
 
         if (error) throw error;
 
+        // 2) Upsert pricing rows
+        await upsertPricing({ courseId: editingId, period: "monthly", amount: monthlyAmt, sortOrder: 1 });
+        await upsertPricing({ courseId: editingId, period: "term", amount: termAmt, sortOrder: 2 });
+        await upsertPricing({ courseId: editingId, period: "annual", amount: annualAmt, sortOrder: 3 });
+
         toast.success("Course updated");
       } else {
-        const { error } = await supabase.from("courses").insert(payload);
+        // 1) Create course row (get id)
+        const { data: insertedCourse, error } = await supabase
+          .from("courses")
+          .insert(payload)
+          .select("id")
+          .single();
 
         if (error) throw error;
+
+        // 2) Create pricing rows (only for those provided)
+        await upsertPricing({ courseId: insertedCourse.id, period: "monthly", amount: monthlyAmt, sortOrder: 1 });
+        await upsertPricing({ courseId: insertedCourse.id, period: "term", amount: termAmt, sortOrder: 2 });
+        await upsertPricing({ courseId: insertedCourse.id, period: "annual", amount: annualAmt, sortOrder: 3 });
 
         toast.success("Course created");
       }
@@ -347,15 +536,35 @@ export default function AdminCourses() {
               />
             </div>
 
-            <div>
-              <label className="text-sm font-medium">Fee (MVR)</label>
-              <input
-                type="number"
-                value={form.fee}
-                onChange={onChange("fee")}
-                className="w-full mt-1 px-3 py-2 border rounded-lg"
-                placeholder="e.g. 1200"
-              />
+            {/* ✅ NEW: 3 fee fields */}
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium">Fees (MVR)</label>
+              <div className="grid md:grid-cols-3 gap-3 mt-1">
+                <input
+                  type="number"
+                  value={form.fee_monthly}
+                  onChange={onChange("fee_monthly")}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="Monthly"
+                />
+                <input
+                  type="number"
+                  value={form.fee_term}
+                  onChange={onChange("fee_term")}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="Term"
+                />
+                <input
+                  type="number"
+                  value={form.fee_annual}
+                  onChange={onChange("fee_annual")}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="Annual"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Enter any combination (e.g. only Annual). These values are saved into <code>course_pricing</code>.
+              </p>
             </div>
 
             <div>
@@ -400,7 +609,9 @@ export default function AdminCourses() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="text-sm font-medium">Subjects (comma separated)</label>
+              <label className="text-sm font-medium">
+                Subjects (comma separated)
+              </label>
               <input
                 value={form.subjects_csv}
                 onChange={onChange("subjects_csv")}
@@ -470,8 +681,8 @@ export default function AdminCourses() {
           </div>
 
           <p className="text-xs text-gray-500 mt-3">
-            Note: creating a course creates a new row + UUID automatically. If your payment flow requires
-            pricing options, you’ll still need to add a `course_pricing` row for new courses.
+            Note: Fees are stored in <code>course_pricing</code> under billing periods
+            <code> monthly</code>, <code> term</code>, <code> annual</code>.
           </p>
         </div>
 
@@ -500,7 +711,9 @@ export default function AdminCourses() {
                       <p className="font-semibold">{c.title ?? "Untitled"}</p>
                       <span
                         className={`text-xs px-2 py-1 rounded-full ${
-                          c.status ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                          c.status
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-600"
                         }`}
                       >
                         {c.status ? "Active" : "Inactive"}
@@ -512,9 +725,11 @@ export default function AdminCourses() {
                     </p>
 
                     <p className="text-sm text-gray-600 mt-1">
-                      Fee:{" "}
+                      Fee (legacy):{" "}
                       <span className="font-medium">
-                        {c.fee !== null && c.fee !== undefined ? `MVR ${c.fee}` : "—"}
+                        {c.fee !== null && c.fee !== undefined
+                          ? `MVR ${c.fee}`
+                          : "—"}
                       </span>
                     </p>
 
