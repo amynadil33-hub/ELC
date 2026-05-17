@@ -13,6 +13,7 @@ import Programs from "./pages/Programs";
 import CourseDetail from "./pages/CourseDetail";
 import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
+import StudentRanking from "./pages/StudentRanking";
 
 /* Application & payment */
 import Apply from "./pages/Apply";
@@ -53,7 +54,6 @@ const App = () => (
             <Toaster />
             <Sonner />
 
-            {/* ✅ ROUTES ONLY — BrowserRouter must be ONLY in main.tsx */}
             <Routes>
               {/* Public */}
               <Route path="/" element={<Index />} />
@@ -61,15 +61,14 @@ const App = () => (
               <Route path="/course/:id" element={<CourseDetail />} />
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/contact" element={<Contact />} />
+              <Route path="/student-ranking" element={<StudentRanking />} />
 
               {/* Application & payment flow */}
               <Route path="/apply/:courseId" element={<Apply />} />
               <Route path="/make-payment" element={<MakePayment />} />
               <Route path="/checkout" element={<Checkout />} />
 
-              {/* ✅ BML redirect MUST match this */}
               <Route path="/payment/success" element={<PaymentSuccess />} />
-              {/* (Optional) keep old route working too */}
               <Route path="/payment-success" element={<PaymentSuccess />} />
 
               {/* Auth */}

@@ -15,12 +15,13 @@ export default function Header() {
     setUserMenuOpen(false);
   };
 
-  const navLinks = [
-    { name: 'Home', href: '/' },
-    { name: 'Programs', href: '/programs' },
-    { name: 'Gallery', href: '/gallery' },
-    { name: 'Contact', href: '/contact' },
-  ];
+ const navLinks = [
+  { name: 'Home', href: '/' },
+  { name: 'Programs', href: '/programs' },
+  { name: 'Student Ranking', href: '/student-ranking' },
+  { name: 'Gallery', href: '/gallery' },
+  { name: 'Contact', href: '/contact' },
+];
 
   return (
     <header className="bg-[#1F6F43] sticky top-0 z-50 shadow-lg">

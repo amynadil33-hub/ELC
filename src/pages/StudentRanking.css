@@ -1,0 +1,52 @@
+.student-ranking-page {
+  padding: 40px 24px;
+  background: #f4f4f4;
+  min-height: 100vh;
+}
+
+.student-ranking-page h1 {
+  font-size: 28px;
+  font-weight: 400;
+  margin-bottom: 30px;
+}
+
+.ranking-box {
+  background: #ffffff;
+  padding: 20px;
+  overflow-x: auto;
+}
+
+.ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+.ranking-table th {
+  text-align: left;
+  padding: 18px;
+  font-weight: 700;
+  color: #222;
+}
+
+.ranking-table td {
+  padding: 20px 18px;
+  border-top: 1px solid #eeeeee;
+  vertical-align: middle;
+}
+
+.student-photo {
+  width: 110px;
+  height: 110px;
+  object-fit: cover;
+}
+
+.no-photo {
+  width: 110px;
+  height: 110px;
+  background: #dddddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
