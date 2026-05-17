@@ -25,9 +25,11 @@ export default function StudentRanking() {
       .select("*");
 
     if (error) {
-      console.error(error);
+      console.error("Error fetching student rankings:", error);
       return;
     }
+
+    let currentRank = 1;
 
     const ranked = (data as Student[])
       .map((student) => ({
@@ -42,15 +44,17 @@ export default function StudentRanking() {
         return a.name.localeCompare(b.name);
       })
       .map((student, index, arr) => {
-        const previous = arr[index - 1];
+        if (
+          index > 0 &&
+          student.total_points !== arr[index - 1].total_points
+        ) {
+          currentRank = index + 1;
+        }
 
-        const rank =
-          previous &&
-          previous.total_points === student.total_points
-            ? previous.rank
-            : index + 1;
-
-        return { ...student, rank };
+        return {
+          ...student,
+          rank: currentRank,
+        };
       });
 
     setStudents(ranked);
