@@ -6,14 +6,16 @@
 
 .student-ranking-page h1 {
   font-size: 28px;
-  font-weight: 400;
+  font-weight: 500;
   margin-bottom: 30px;
+  color: #1f6f43;
 }
 
 .ranking-box {
   background: #ffffff;
   padding: 20px;
   overflow-x: auto;
+  border-radius: 12px;
 }
 
 .ranking-table {
@@ -39,6 +41,7 @@
   width: 110px;
   height: 110px;
   object-fit: cover;
+  border-radius: 8px;
 }
 
 .no-photo {
@@ -49,4 +52,107 @@
   align-items: center;
   justify-content: center;
   font-size: 12px;
+  border-radius: 8px;
+}
+
+/* Mobile card layout */
+@media (max-width: 768px) {
+  .student-ranking-page {
+    padding: 24px 14px;
+  }
+
+  .student-ranking-page h1 {
+    font-size: 24px;
+    text-align: center;
+  }
+
+  .ranking-box {
+    background: transparent;
+    padding: 0;
+    overflow-x: visible;
+  }
+
+  .ranking-table {
+    min-width: 0;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 16px;
+  }
+
+  .ranking-table thead {
+    display: none;
+  }
+
+  .ranking-table,
+  .ranking-table tbody,
+  .ranking-table tr,
+  .ranking-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .ranking-table tr {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  }
+
+  .ranking-table td {
+    border: none;
+    padding: 8px 0;
+    text-align: left;
+  }
+
+  .ranking-table td:nth-child(1) {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1f6f43;
+  }
+
+  .ranking-table td:nth-child(1)::before {
+    content: "Rank ";
+  }
+
+  .ranking-table td:nth-child(2) {
+    text-align: center;
+    padding: 12px 0;
+  }
+
+  .student-photo,
+  .no-photo {
+    width: 130px;
+    height: 130px;
+    margin: 0 auto;
+    border-radius: 50%;
+  }
+
+  .ranking-table td:nth-child(3) {
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    color: #222;
+  }
+
+  .ranking-table td:nth-child(4)::before {
+    content: "Grade: ";
+    font-weight: 700;
+  }
+
+  .ranking-table td:nth-child(5)::before {
+    content: "Assignments Completed: ";
+    font-weight: 700;
+  }
+
+  .ranking-table td:nth-child(6)::before {
+    content: "Total Points: ";
+    font-weight: 700;
+  }
+
+  .ranking-table td:nth-child(4),
+  .ranking-table td:nth-child(5),
+  .ranking-table td:nth-child(6) {
+    font-size: 15px;
+    color: #333;
+  }
 }
