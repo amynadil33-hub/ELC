@@ -34,7 +34,8 @@ export default function StudentRanking() {
     const ranked = (data as Student[])
       .map((student) => ({
         ...student,
-        total_points: student.assignments_submitted * 10,
+        assignments_submitted: Number(student.assignments_submitted) || 0,
+        total_points: (Number(student.assignments_submitted) || 0) * 10,
       }))
       .sort((a, b) => {
         if ((b.total_points ?? 0) !== (a.total_points ?? 0)) {
@@ -48,7 +49,7 @@ export default function StudentRanking() {
           index > 0 &&
           student.total_points !== arr[index - 1].total_points
         ) {
-          currentRank = index + 1;
+          currentRank += 1;
         }
 
         return {
