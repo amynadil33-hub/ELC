@@ -19,6 +19,7 @@ export default function Header() {
   { name: 'Home', href: '/' },
   { name: 'Programs', href: '/programs' },
   { name: 'Student Ranking', href: '/student-ranking' },
+  { name: 'Authors of ELC', href: '/Authorsofelc' },
   { name: 'Gallery', href: '/gallery' },
   { name: 'Contact', href: '/contact' },
 ];

@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import Layout from "@/components/layout/Layout";
+import CourseCard from "@/components/ui/CourseCard";
 import { supabase } from "@/lib/supabase";
-import "./StudentRanking.css";
+import { Course } from "@/types";
+import { SEED_COURSES } from "@/lib/seedData";
+import { ChevronDown, ChevronUp, Search, Filter, BookOpen } from "lucide-react";
+import styles from "./StudentRanking.module.css";
 
 interface Student {
   id: string;
@@ -61,12 +66,13 @@ export default function StudentRanking() {
     setStudents(ranked);
   }
 
-  return (
-    <main className="student-ranking-page">
+ return (
+  <Layout>
+    <main className={styles.studentRankingPage}>
       <h1>Student Ranking</h1>
 
-      <div className="ranking-box">
-        <table className="ranking-table">
+      <div className={styles.rankingBox}>
+        <table className={styles.rankingTable}>
           <thead>
             <tr>
               <th>Rank</th>
@@ -88,10 +94,10 @@ export default function StudentRanking() {
                     <img
                       src={student.photo_url}
                       alt={student.name}
-                      className="student-photo"
+                      className={styles.studentPhoto}
                     />
                   ) : (
-                    <div className="no-photo">No Photo</div>
+                    <div className={styles.noPhoto}>No Photo</div>
                   )}
                 </td>
 
@@ -105,5 +111,6 @@ export default function StudentRanking() {
         </table>
       </div>
     </main>
+  </Layout>
   );
 }

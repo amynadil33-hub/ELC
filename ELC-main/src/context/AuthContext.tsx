@@ -4,6 +4,9 @@ import { User } from "@supabase/supabase-js";
 
 type SignUpOptions = {
   emailRedirectTo?: string;
+  data?: {
+    full_name?: string;
+  };
 };
 
 interface AuthContextType {
@@ -35,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = await supabase.auth.getSession();
 
     const currentUser = session?.user ?? null;
+    console.log("CURRENT USER:", currentUser);
     setUser(currentUser);
 
     if (!currentUser) {
@@ -44,10 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("id", currentUser.id)
-      .single();
+       .from("profiles")
+  .select("is_admin")
+  .eq("id", currentUser.id)
+  .maybeSingle();
 
     if (!error && profile) {
       setIsAdmin(profile.is_admin === true);
@@ -76,17 +80,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ✅ UPDATED: accepts options.emailRedirectTo
-  const signUp = async (email: string, password: string, options?: SignUpOptions) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: options?.emailRedirectTo
-        ? { emailRedirectTo: options.emailRedirectTo }
-        : undefined,
-    });
+ const signUp = async (
+  email: string,
+  password: string,
+  options?: SignUpOptions
+) => {
 
-    return { error: (error as Error) ?? null };
+  const { error } = await supabase.auth.signUp({
+
+    email,
+
+    password,
+
+    options: {
+
+      emailRedirectTo: options?.emailRedirectTo,
+
+      data: {
+        full_name: options?.data?.full_name
+      }
+
+    }
+
+  });
+
+
+  return {
+    error: (error as Error) ?? null
   };
+
+};
 
   const signOut = async () => {
     await supabase.auth.signOut();

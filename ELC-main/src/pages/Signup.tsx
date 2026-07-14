@@ -15,6 +15,7 @@ export default function Signup() {
 
   const { signUp } = useAuth();
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -33,9 +34,9 @@ export default function Signup() {
     e.preventDefault();
     setError("");
 
-    if (!email || !password || !confirmPassword) {
-      setError("Please fill in all fields");
-      return;
+   if (!name || !email || !password || !confirmPassword) {
+  setError("Please fill in all fields");
+  return;
     }
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -55,9 +56,17 @@ export default function Signup() {
         ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirect)}`
         : undefined;
 
-      const { error } = await signUp(email, password, {
-        emailRedirectTo,
-      });
+      const { error } = await signUp(
+  email,
+  password,
+  {
+    emailRedirectTo,
+
+    data: {
+      full_name: name
+    }
+  }
+);
 
       if (error) {
         setError(error.message);
@@ -137,6 +146,19 @@ export default function Signup() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Full Name
+  </label>
+
+  <input
+    type="text"
+    value={name}
+    onChange={(e) => setName(e.target.value)}
+    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1F6F43] focus:border-transparent"
+    placeholder="Enter your full name"
+  />
+</div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address

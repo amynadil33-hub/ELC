@@ -76,17 +76,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ✅ UPDATED: accepts options.emailRedirectTo
-  const signUp = async (email: string, password: string, options?: SignUpOptions) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: options?.emailRedirectTo
-        ? { emailRedirectTo: options.emailRedirectTo }
-        : undefined,
-    });
+ const signUp = async (
+  email: string,
+  password: string,
+  options?: SignUpOptions
+) => {
 
-    return { error: (error as Error) ?? null };
+  const result = await supabase.auth.signUp({
+    email,
+    password,
+    options: options?.emailRedirectTo
+      ? { emailRedirectTo: options.emailRedirectTo }
+      : undefined,
+  });
+
+  console.log("SIGNUP RESULT:", result);
+
+  return {
+    error: (result.error as Error) ?? null,
   };
+};
 
   const signOut = async () => {
     await supabase.auth.signOut();

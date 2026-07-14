@@ -14,6 +14,12 @@ import CourseDetail from "./pages/CourseDetail";
 import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
 import StudentRanking from "./pages/StudentRanking";
+import Authorsofelc from "./pages/Authorsofelc";
+import CreateBook from "./pages/CreateBook";
+import EditBook from "./pages/EditBook";
+import BookReader from "./pages/BookReader";
+import MyBooks from "@/pages/MyBooks";
+
 
 /* Application & payment */
 import Apply from "./pages/Apply";
@@ -62,6 +68,11 @@ const App = () => (
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/student-ranking" element={<StudentRanking />} />
+              <Route path="/Authorsofelc" element={<Authorsofelc />} />
+              <Route path="/create-book" element={<CreateBook />} />
+              <Route path="/edit-book/:id" element={<EditBook />} /> 
+              <Route path="/book/:id" element={<BookReader />} /> 
+              <Route path="/my-books" element={<MyBooks />} /> 
 
               {/* Application & payment flow */}
               <Route path="/apply/:courseId" element={<Apply />} />
