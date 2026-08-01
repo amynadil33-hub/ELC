@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/context/AuthContext";
 import { ApplicationProvider } from "@/context/ApplicationContext";
 
+
 /* Public pages */
 import Index from "./pages/Index";
 import Programs from "./pages/Programs";
